@@ -270,12 +270,12 @@
                           </el-button>
                           <el-button size="small" text>
                             <el-icon class="text-xs"><CircleCheck /></el-icon>
-                          </el-button>
+                          </el-button> 
                         </div>
                       </div>
                     </div>
                   </div>
-
+                  <!--测试提交-->
                   <!-- 用户消息 -->
                   <div v-else class="flex items-start space-x-3 max-w-md">
                     <div class="chat-bubble-user px-4 py-3 shadow-md">
