@@ -25,6 +25,12 @@
         </div>
         
         <div class="flex items-center space-x-4">
+          <el-tooltip content="切换功能清单 / 版本更新" placement="bottom">
+            <button @click="togglePanel" class="px-3 py-2 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl border border-gray-200 hover:bg-white hover:shadow-lg transition-all duration-200 flex items-center">
+              <el-icon class="mr-1"><List /></el-icon>
+              Todolist / 更新
+            </button>
+          </el-tooltip>
           <router-link
             to="/login"
             class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
@@ -311,6 +317,56 @@
       </div>
     </main>
 
+    <!-- 浮动面板：Todolist & 更新日志 -->
+    <transition name="fade">
+      <div v-if="showPanel" class="fixed right-6 bottom-6 z-30 w-[92vw] max-w-xl">
+        <div class="glass-effect rounded-2xl border border-white/30 shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 bg-white/60 backdrop-blur">
+            <div class="flex items-center text-sm text-gray-600">
+              <el-icon class="mr-2"><List /></el-icon>
+              功能清单 & 版本更新
+            </div>
+            <div class="flex items-center space-x-2">
+              <el-segmented v-model="activeTab" :options="tabOptions" size="small" />
+              <el-button link type="danger" @click="togglePanel">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+          </div>
+          <div class="bg-white/70 backdrop-blur p-4">
+            <div v-if="activeTab === 'todos'">
+              <div class="mb-2 text-xs text-gray-500">当前已开发功能</div>
+              <ul class="space-y-2">
+                <li v-for="t in featureTodos" :key="t.id" class="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-3 py-2">
+                  <div class="flex items-center">
+                    <el-checkbox v-model="t.done" @change="onToggleTodo(t)"></el-checkbox>
+                    <span class="ml-2" :class="t.done ? 'line-through text-gray-400' : 'text-gray-700'">{{ t.title }}</span>
+                  </div>
+                  <el-tag :type="t.done ? 'success' : 'info'" size="small">{{ t.done ? '完成' : '进行中' }}</el-tag>
+                </li>
+              </ul>
+            </div>
+            <div v-else>
+              <div class="mb-2 text-xs text-gray-500">版本更新记录</div>
+              <el-timeline>
+                <el-timeline-item
+                  v-for="v in versions"
+                  :key="v.id"
+                  :timestamp="v.date"
+                  placement="top"
+                >
+                  <div class="font-semibold mb-1">{{ v.title }}</div>
+                  <ul class="list-disc list-inside text-gray-700 text-sm">
+                    <li v-for="(u, idx) in v.updates" :key="idx">{{ u }}</li>
+                  </ul>
+                </el-timeline-item>
+              </el-timeline>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- 页脚 -->
     <footer class="relative z-10 mt-20 py-12 border-t border-gray-200/50">
       <div class="max-w-7xl mx-auto px-6">
@@ -386,8 +442,28 @@ import {
   UserFilled, 
   Right,
   Message,
-  Phone
+  Phone,
+  List,
+  Close
 } from '@element-plus/icons-vue'
+import { storeToRefs } from 'pinia'
+import { useReleaseStore } from '@/stores/release'
+
+const releaseStore = useReleaseStore()
+const { showPanel, activeTab, versions, featureTodos } = storeToRefs(releaseStore)
+
+const tabOptions = [
+  { label: 'Todolist', value: 'todos' },
+  { label: '更新日志', value: 'changelog' },
+]
+
+function togglePanel() {
+  releaseStore.togglePanel()
+}
+
+function onToggleTodo(todo) {
+  releaseStore.markTodo(todo.id, todo.done)
+}
 </script>
 
 <style scoped>
