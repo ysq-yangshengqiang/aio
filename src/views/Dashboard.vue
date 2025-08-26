@@ -116,12 +116,42 @@
                   <li 
                     v-for="(kr, index) in okrStore.currentOKR.key_results" 
                     :key="index"
-                    class="flex items-start group"
+                    class="group"
                   >
-                    <div class="w-6 h-6 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full flex items-center justify-center text-white text-xs mr-3 mt-0.5 shadow-sm group-hover:shadow-md transition-shadow">
-                      {{ index + 1 }}
+                    <div class="flex items-start justify-between mb-2">
+                      <div class="flex items-start flex-1 mr-3">
+                        <div class="w-6 h-6 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full flex items-center justify-center text-white text-xs mr-3 mt-0.5 shadow-sm group-hover:shadow-md transition-shadow">
+                          {{ index + 1 }}
+                        </div>
+                        <span class="text-emerald-800 leading-relaxed flex-1">{{ kr.text }}</span>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-sm font-semibold" :class="getProgressColor(kr.progress || 0)">
+                          {{ kr.progress || 0 }}%
+                        </div>
+                      </div>
                     </div>
-                    <span class="text-emerald-800 leading-relaxed flex-1">{{ kr.text }}</span>
+                    
+                    <!-- 进度条 -->
+                    <div class="ml-9">
+                      <div class="flex items-center space-x-2 mb-2">
+                        <div class="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div 
+                            class="h-full bg-gradient-to-r from-emerald-500 to-green-500 rounded-full transition-all duration-300"
+                            :style="{ width: `${kr.progress || 0}%` }"
+                          ></div>
+                        </div>
+                        <el-button 
+                          size="small" 
+                          type="primary" 
+                          text
+                          @click="showProgressDialog(index)"
+                          class="text-xs"
+                        >
+                          更新进度
+                        </el-button>
+                      </div>
+                    </div>
                   </li>
                 </ul>
               </div>
@@ -132,10 +162,31 @@
                   <el-icon class="mr-1"><Edit /></el-icon>
                   编辑
                 </el-button>
-                <el-button size="small" type="success" class="flex-1">
-                  <el-icon class="mr-1"><Check /></el-icon>
-                  进度
+                <el-button size="small" type="success" class="flex-1" @click="showProgressReport">
+                  <el-icon class="mr-1"><DataAnalysis /></el-icon>
+                  进度报告
                 </el-button>
+              </div>
+
+              <!-- 整体进度显示 -->
+              <div v-if="okrStore.getOKRStats" class="mt-4 p-3 bg-white/50 rounded-lg border border-gray-100">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm text-gray-600">整体进度</span>
+                  <span class="text-sm font-semibold" :class="getProgressColor(okrStore.getOKRStats.overallProgress)">
+                    {{ okrStore.getOKRStats.overallProgress }}%
+                  </span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    class="h-2 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-300"
+                    :style="{ width: `${okrStore.getOKRStats.overallProgress}%` }"
+                  ></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>已完成: {{ okrStore.getOKRStats.completedKRs }}</span>
+                  <span>进行中: {{ okrStore.getOKRStats.inProgressKRs }}</span>
+                  <span>未开始: {{ okrStore.getOKRStats.notStartedKRs }}</span>
+                </div>
               </div>
             </div>
 
@@ -441,6 +492,153 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 进度更新对话框 -->
+    <el-dialog
+      v-model="showProgressUpdate"
+      title="更新关键结果进度"
+      width="500px"
+      :close-on-click-modal="false"
+      class="custom-dialog"
+    >
+      <div class="p-2" v-if="selectedKRIndex !== null && okrStore.currentOKR">
+        <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+          <h4 class="font-semibold text-gray-800 mb-2">关键结果 {{ selectedKRIndex + 1 }}:</h4>
+          <p class="text-gray-700">{{ okrStore.currentOKR.key_results[selectedKRIndex]?.text }}</p>
+        </div>
+        
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-3">
+            当前进度: {{ progressValue }}%
+          </label>
+          <el-slider
+            v-model="progressValue"
+            :min="0"
+            :max="100"
+            :step="5"
+            show-stops
+            :marks="progressMarks"
+            class="mb-4"
+          />
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">进度说明（可选）:</label>
+          <el-input
+            v-model="progressNote"
+            type="textarea"
+            :rows="3"
+            placeholder="描述您在这个关键结果上的具体进展..."
+            class="input-enhanced"
+          />
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="flex justify-end space-x-3">
+          <el-button @click="showProgressUpdate = false" size="large">
+            取消
+          </el-button>
+          <el-button 
+            type="primary" 
+            @click="updateProgress" 
+            :loading="okrStore.loading"
+            class="btn-primary px-8"
+            size="large"
+          >
+            <el-icon class="mr-1"><Check /></el-icon>
+            更新进度
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 进度报告对话框 -->
+    <el-dialog
+      v-model="showProgressReportDialog"
+      title="OKR进度报告"
+      width="700px"
+      :close-on-click-modal="false"
+      class="custom-dialog"
+    >
+      <div class="p-2" v-if="progressReportData">
+        <div class="mb-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-2">目标</h3>
+          <p class="text-gray-700 p-3 bg-blue-50 rounded-lg">{{ progressReportData.objective }}</p>
+        </div>
+
+        <div class="mb-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">关键结果进展</h3>
+          <div class="space-y-3">
+            <div 
+              v-for="(kr, index) in progressReportData.keyResults" 
+              :key="index"
+              class="p-3 border border-gray-200 rounded-lg"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-medium text-gray-800">{{ kr.text }}</span>
+                <el-tag :type="getStatusType(kr.status)" size="small">
+                  {{ getStatusText(kr.status) }}
+                </el-tag>
+              </div>
+              <div class="flex items-center space-x-3">
+                <div class="flex-1 bg-gray-200 rounded-full h-2">
+                  <div 
+                    class="h-2 rounded-full transition-all duration-300"
+                    :class="getProgressBarClass(kr.progress)"
+                    :style="{ width: `${kr.progress}%` }"
+                  ></div>
+                </div>
+                <span class="text-sm font-semibold" :class="getProgressColor(kr.progress)">
+                  {{ kr.progress }}%
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">整体统计</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg text-center">
+              <div class="text-3xl font-bold text-blue-600">{{ progressReportData.overallProgress }}%</div>
+              <div class="text-sm text-blue-500">整体进度</div>
+            </div>
+            <div class="p-4 bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg text-center">
+              <div class="text-3xl font-bold text-emerald-600">{{ progressReportData.completionRate }}%</div>
+              <div class="text-sm text-emerald-500">完成率</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="progressReportData.recommendations?.length > 0">
+          <h3 class="text-lg font-bold text-gray-800 mb-4">智能建议</h3>
+          <div class="space-y-2">
+            <div 
+              v-for="(rec, index) in progressReportData.recommendations" 
+              :key="index"
+              class="p-3 rounded-lg border-l-4"
+              :class="getRecommendationClass(rec.priority)"
+            >
+              <div class="flex items-center">
+                <el-icon class="mr-2" :class="getRecommendationIconClass(rec.type)">
+                  <component :is="getRecommendationIcon(rec.type)" />
+                </el-icon>
+                <span class="text-sm">{{ rec.message }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <template #footer>
+        <div class="flex justify-end">
+          <el-button @click="showProgressReportDialog = false" type="primary" size="large">
+            知道了
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -467,7 +665,11 @@ import {
   Trophy, 
   DataAnalysis,
   CopyDocument,
-  CircleCheck
+  CircleCheck,
+  Warning,
+  Clock,
+  Medal,
+  InfoFilled
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -478,9 +680,24 @@ const chatStore = useChatStore()
 
 // 响应式数据
 const showCreateOKR = ref(false)
+const showProgressUpdate = ref(false)
+const showProgressReportDialog = ref(false)
 const messageInput = ref('')
 const chatContainer = ref(null)
 const okrFormRef = ref()
+const selectedKRIndex = ref(null)
+const progressValue = ref(0)
+const progressNote = ref('')
+const progressReportData = ref(null)
+
+// 进度标记
+const progressMarks = {
+  0: '未开始',
+  25: '25%',
+  50: '50%',
+  75: '75%',
+  100: '完成'
+}
 
 // OKR表单
 const okrForm = reactive({
@@ -594,6 +811,118 @@ const formatTime = (timestamp) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// 显示进度更新对话框
+const showProgressDialog = (krIndex) => {
+  selectedKRIndex.value = krIndex
+  const kr = okrStore.currentOKR.key_results[krIndex]
+  progressValue.value = kr.progress || 0
+  progressNote.value = ''
+  showProgressUpdate.value = true
+}
+
+// 更新进度
+const updateProgress = async () => {
+  if (selectedKRIndex.value === null) return
+  
+  try {
+    const result = await okrStore.updateKeyResultProgress(
+      okrStore.currentOKR.id,
+      selectedKRIndex.value,
+      progressValue.value
+    )
+    
+    if (result.success) {
+      ElMessage.success('进度更新成功！')
+      showProgressUpdate.value = false
+      selectedKRIndex.value = null
+      progressNote.value = ''
+    } else {
+      ElMessage.error(result.error || '更新失败')
+    }
+  } catch (error) {
+    ElMessage.error('更新进度时出错')
+    console.error('Update progress error:', error)
+  }
+}
+
+// 显示进度报告
+const showProgressReport = () => {
+  progressReportData.value = okrStore.generateProgressReport()
+  showProgressReportDialog.value = true
+}
+
+// 获取进度颜色类
+const getProgressColor = (progress) => {
+  if (progress >= 100) return 'text-green-600'
+  if (progress >= 75) return 'text-blue-600'
+  if (progress >= 50) return 'text-yellow-600'
+  if (progress > 0) return 'text-orange-600'
+  return 'text-gray-400'
+}
+
+// 获取进度条颜色类
+const getProgressBarClass = (progress) => {
+  if (progress >= 100) return 'bg-green-500'
+  if (progress >= 75) return 'bg-blue-500'
+  if (progress >= 50) return 'bg-yellow-500'
+  if (progress > 0) return 'bg-orange-500'
+  return 'bg-gray-300'
+}
+
+// 获取状态类型
+const getStatusType = (status) => {
+  switch (status) {
+    case 'completed': return 'success'
+    case 'in_progress': return 'warning'
+    case 'not_started': return 'info'
+    default: return 'info'
+  }
+}
+
+// 获取状态文本
+const getStatusText = (status) => {
+  switch (status) {
+    case 'completed': return '已完成'
+    case 'in_progress': return '进行中'
+    case 'not_started': return '未开始'
+    default: return '未知'
+  }
+}
+
+// 获取建议类样式
+const getRecommendationClass = (priority) => {
+  switch (priority) {
+    case 'high': return 'bg-red-50 border-red-400'
+    case 'medium': return 'bg-yellow-50 border-yellow-400'
+    case 'low': return 'bg-green-50 border-green-400'
+    default: return 'bg-gray-50 border-gray-400'
+  }
+}
+
+// 获取建议图标类
+const getRecommendationIconClass = (type) => {
+  switch (type) {
+    case 'action': return 'text-red-500'
+    case 'progress': return 'text-yellow-500'
+    case 'celebration': return 'text-green-500'
+    case 'motivation': return 'text-blue-500'
+    case 'achievement': return 'text-purple-500'
+    default: return 'text-gray-500'
+  }
+}
+
+// 获取建议图标
+const getRecommendationIcon = (type) => {
+  switch (type) {
+    case 'action': return 'Warning'
+    case 'progress': return 'Clock'
+    case 'celebration': return 'Trophy'
+    case 'motivation': return 'Star'
+    case 'achievement': return 'Medal'
+    default: return 'InfoFilled'
+  }
 }
 
 // 监听聊天消息变化，自动滚动

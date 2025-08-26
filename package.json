@@ -1,32 +1,65 @@
 {
-  "name": "qimingxing-platform",
+  "name": "aio-learning-system",
   "version": "1.0.0",
-  "description": "启明星平台 - AI驱动的学生成长管理系统",
+  "description": "启明星AI学习管理系统 - AI驱动的个人学习目标管理平台",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
+    "format": "prettier --write src/",
+    "type-check": "vue-tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "analyze": "vite-bundle-analyzer"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5",
+    "@supabase/supabase-js": "^2.56.0",
+    "@vueuse/core": "^10.7.0",
+    "axios": "^1.6.0",
+    "dayjs": "^1.11.10",
+    "lodash-es": "^4.17.21",
+    "nanoid": "^5.0.4",
     "pinia": "^2.1.7",
-    "element-plus": "^2.4.4",
-    "@element-plus/icons-vue": "^2.3.1",
-    "axios": "^1.6.2",
-    "@supabase/supabase-js": "^2.38.5"
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.12",
     "@vitejs/plugin-vue": "^4.5.2",
-    "vite": "^5.0.8",
+    "@vue/test-utils": "^2.4.3",
+    "autoprefixer": "^10.4.21",
     "eslint": "^8.56.0",
     "eslint-plugin-vue": "^9.19.2",
-    "@vue/eslint-config-prettier": "^9.0.0",
+    "jsdom": "^23.0.1",
+    "postcss": "^8.5.6",
     "prettier": "^3.1.1",
-    "tailwindcss": "^3.3.6",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32"
-  }
+    "tailwindcss": "^4.1.12",
+    "vite": "^5.0.8",
+    "vite-bundle-analyzer": "^0.7.0",
+    "vitest": "^1.1.0",
+    "vue-tsc": "^1.8.25"
+  },
+  "keywords": [
+    "vue3",
+    "vite",
+    "supabase",
+    "learning-management",
+    "okr",
+    "ai-assistant",
+    "education",
+    "goal-tracking"
+  ],
+  "author": "AIO Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/aio-learning-system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/aio-learning-system/issues"
+  },
+  "homepage": "https://github.com/your-org/aio-learning-system#readme"
 }

@@ -22,23 +22,23 @@
       </div>
 
       <!-- 登录表单 -->
-      <div class="space-y-6">
+      <el-form :model="loginForm" :rules="loginRules" ref="loginFormRef" class="space-y-6">
         <div class="animate-slideIn" style="animation-delay: 0.1s">
-          <div class="relative w-full mb-6">
+          <el-form-item prop="email">
             <el-input
               v-model="loginForm.email"
               type="email"
               placeholder="请输入邮箱地址"
               size="large"
               :prefix-icon="Message"
-              class="input-enhanced w-full"
-              style="width: 100%;"
+              class="input-enhanced"
+              @keyup.enter="handleLogin"
             />
-          </div>
+          </el-form-item>
         </div>
 
         <div class="animate-slideIn" style="animation-delay: 0.2s">
-          <div class="relative w-full mb-6">
+          <el-form-item prop="password">
             <el-input
               v-model="loginForm.password"
               type="password"
@@ -46,10 +46,10 @@
               size="large"
               :prefix-icon="Lock"
               show-password
-              class="input-enhanced w-full"
-              style="width: 100%;"
+              class="input-enhanced"
+              @keyup.enter="handleLogin"
             />
-          </div>
+          </el-form-item>
         </div>
 
         <div class="animate-slideIn" style="animation-delay: 0.3s">
@@ -58,14 +58,32 @@
             size="large"
             class="w-full btn-primary shadow-lg hover:shadow-xl transition-all duration-300"
             @click="handleLogin"
+            :loading="authStore.loading"
           >
-            <el-icon class="mr-2">
+            <el-icon class="mr-2" v-if="!authStore.loading">
               <Right />
             </el-icon>
-            立即登录
+            {{ authStore.loading ? '登录中...' : '立即登录' }}
           </el-button>
         </div>
-      </div>
+        
+        <!-- 快速体验按钮 -->
+        <div class="animate-slideIn" style="animation-delay: 0.35s">
+          <el-button
+            type="info"
+            size="large"
+            class="w-full shadow-md hover:shadow-lg transition-all duration-300"
+            @click="quickLogin"
+            :disabled="authStore.loading"
+            plain
+          >
+            <el-icon class="mr-2">
+              <Star />
+            </el-icon>
+            快速体验（无需注册）
+          </el-button>
+        </div>
+      </el-form>
 
       <!-- 错误提示区域暂时隐藏 -->
 
@@ -109,33 +127,72 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Message, Lock, Star, Right, Warning, UserFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
+const loginFormRef = ref()
 
 const loginForm = reactive({
   email: '',
   password: ''
 })
 
+const loginRules = {
+  email: [
+    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 6, message: '密码至少6个字符', trigger: 'blur' }
+  ]
+}
+
 const handleLogin = async () => {
+  if (!loginFormRef.value) return
+  
   try {
-    // 使用模拟登录
-    const result = await authStore.login(loginForm.email || 'test@example.com', loginForm.password || 'password123')
+    const valid = await loginFormRef.value.validate()
+    if (!valid) return
+    
+    const result = await authStore.login(loginForm.email, loginForm.password)
     
     if (result.success) {
-      ElMessage.success('登录成功！')
-      router.push('/dashboard')
+      ElMessage.success('登录成功！欢迎回来～')
+      const redirect = route.query.redirect || '/dashboard'
+      router.push(String(redirect))
     } else {
       ElMessage.error('登录失败：' + result.error)
     }
   } catch (error) {
     console.error('Login error:', error)
-    ElMessage.error('登录出错：' + error.message)
+    ElMessage.error('登录出错，请稍后重试')
+  }
+}
+
+// 快速体验功能（模拟登录）
+const quickLogin = async () => {
+  try {
+    // 设置模拟用户
+    authStore.user = {
+      id: 'mock-user-id',
+      email: 'demo@qimingxing.com',
+      email_confirmed_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    }
+    
+    await authStore.fetchUserProfile()
+    
+    ElMessage.success('欢迎体验启明星平台！')
+    router.push('/dashboard')
+  } catch (error) {
+    console.error('Quick login error:', error)
+    ElMessage.error('快速体验失败，请稍后重试')
   }
 }
 </script>
