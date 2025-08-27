@@ -35,10 +35,14 @@ export class BaseService {
         .single()
 
       if (error) {
+        console.error(`Error creating record in ${this.tableName}:`, error)
+        console.error('Data attempted to insert:', data)
         return {
           success: false,
           error: error.message,
-          code: error.code
+          code: error.code,
+          details: error.details,
+          hint: error.hint
         }
       }
 

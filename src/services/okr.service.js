@@ -26,34 +26,63 @@ export class OKRService extends BaseService {
         }
       }
 
+      // 基础OKR数据，只包含核心字段
       const newOKR = {
         user_id: user.id,
         title: okrData.title,
-        description: okrData.description || '',
-        category: okrData.category || 'learning',
-        priority: okrData.priority || 'medium',
-        status: 'active',
-        progress: 0,
-        target_date: okrData.target_date || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        description: okrData.description || ''
       }
 
+      // 安全地添加可选字段
+      const optionalFields = ['category', 'priority', 'status', 'progress', 'start_date', 'target_date']
+      
+      optionalFields.forEach(field => {
+        if (okrData[field] !== undefined && okrData[field] !== null) {
+          newOKR[field] = okrData[field]
+        }
+      })
+
+      // 设置默认值
+      if (!newOKR.status) newOKR.status = 'active'
+      if (!newOKR.progress) newOKR.progress = 0
+      if (!newOKR.category) newOKR.category = 'learning'
+      if (!newOKR.priority) newOKR.priority = 'medium'
+
+      console.log('Creating OKR with data:', newOKR)
+
       const result = await this.create(newOKR)
+      
+      if (!result.success) {
+        console.error('OKR creation failed:', result.error)
+        
+        // 如果是表结构问题，提供更友好的错误信息
+        if (result.error.includes('could not find') || result.error.includes('schema cache')) {
+          return {
+            success: false,
+            error: '数据库表结构不完整，请联系管理员执行数据库迁移'
+          }
+        }
+        
+        return result
+      }
       
       if (result.success && okrData.keyResults && okrData.keyResults.length > 0) {
         // 创建关键结果
         const keyResultsResult = await this.createKeyResults(result.data.id, okrData.keyResults)
         if (keyResultsResult.success) {
           result.data.key_results = keyResultsResult.data
+        } else {
+          console.warn('Key results creation failed:', keyResultsResult.error)
+          // 即使关键结果创建失败，OKR本身已经创建成功
         }
       }
 
       return result
     } catch (error) {
+      console.error('OKR creation error:', error)
       return {
         success: false,
-        error: error.message
+        error: `创建失败: ${error.message}`
       }
     }
   }
@@ -353,7 +382,7 @@ export class OKRService extends BaseService {
    * 获取OKR统计数据
    * @returns {Promise<Object>} 统计结果
    */
-  async getOKRStats() {
+  async getStats() {
     try {
       const user = await getCurrentUser()
       if (!user) {
@@ -397,6 +426,50 @@ export class OKRService extends BaseService {
       return {
         success: true,
         data: stats
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * 获取最近的OKR
+   * @param {number} limit - 限制数量
+   * @returns {Promise<Object>} 查询结果
+   */
+  async getRecentOkrs(limit = 5) {
+    try {
+      const user = await getCurrentUser()
+      if (!user) {
+        return {
+          success: false,
+          error: '用户未登录'
+        }
+      }
+
+      const { data, error } = await supabase
+        .from('okrs')
+        .select(`
+          *,
+          key_results(*)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (error) {
+        return {
+          success: false,
+          error: error.message
+        }
+      }
+
+      return {
+        success: true,
+        data: data || []
       }
     } catch (error) {
       return {

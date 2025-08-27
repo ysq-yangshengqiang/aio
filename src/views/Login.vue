@@ -202,9 +202,10 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { authService } from '@/services/auth.service.js'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
@@ -233,7 +234,7 @@ const validateForm = () => {
   errors.password = ''
 
   if (!loginForm.email.trim()) {
-    errors.username = '请输入用户名'
+    errors.username = '请输入用户名或邮箱'
     return false
   }
 
@@ -256,17 +257,27 @@ const handleLogin = async () => {
   }
 
   try {
-    const result = await authStore.login(loginForm.email, loginForm.password)
+    authStore.loading = true
+    
+    // 使用统一的认证服务登录
+    const result = await authService.login(loginForm.email, loginForm.password)
     
     if (result.success) {
       ElMessage.success('登录成功！欢迎回来～')
+      
+      // 等待认证状态同步
+      await authStore.init()
+      
+      // 获取重定向路径
       const redirect = route.query.redirect || '/dashboard'
       router.push(String(redirect))
     } else {
       ElMessage.error('登录失败：' + result.error)
-      if (result.error.includes('用户名') || result.error.includes('邮箱')) {
-        errors.username = '用户名不存在'
-      } else if (result.error.includes('密码')) {
+      
+      // 根据错误类型设置相应的错误信息
+      if (result.error.includes('用户') || result.error.includes('邮箱') || result.error.includes('email')) {
+        errors.username = '用户不存在或邮箱不正确'
+      } else if (result.error.includes('密码') || result.error.includes('password')) {
         errors.password = '密码错误'
       } else {
         errors.password = '登录失败，请重试'
@@ -276,6 +287,8 @@ const handleLogin = async () => {
     console.error('Login error:', error)
     ElMessage.error('登录出错，请稍后重试')
     errors.password = '登录出错，请稍后重试'
+  } finally {
+    authStore.loading = false
   }
 }
 
@@ -283,6 +296,20 @@ const handleThirdPartyLogin = (provider) => {
   console.log(`使用 ${provider} 登录`)
   ElMessage.info(`${provider} 登录功能开发中...`)
 }
+
+// 组件挂载时初始化认证状态
+onMounted(async () => {
+  try {
+    await authStore.init()
+    // 如果用户已经登录，直接跳转
+    if (authStore.isAuthenticated) {
+      const redirect = route.query.redirect || '/dashboard'
+      router.push(String(redirect))
+    }
+  } catch (error) {
+    console.error('初始化认证状态失败:', error)
+  }
+})
 </script>
 
 <style scoped>

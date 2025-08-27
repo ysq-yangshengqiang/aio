@@ -54,54 +54,7 @@
     </div>
     
     <!-- 全局通知 -->
-    <div class="fixed top-4 right-4 z-50 space-y-2">
-      <div
-        v-for="notification in notifications"
-        :key="notification.id"
-        class="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden"
-      >
-        <div class="p-4">
-          <div class="flex items-start">
-            <div class="flex-shrink-0">
-              <div 
-                class="w-6 h-6 rounded-full flex items-center justify-center"
-                :class="{
-                  'bg-green-100 text-green-600': notification.type === 'success',
-                  'bg-red-100 text-red-600': notification.type === 'error',
-                  'bg-yellow-100 text-yellow-600': notification.type === 'warning',
-                  'bg-blue-100 text-blue-600': notification.type === 'info'
-                }"
-              >
-                <span class="text-sm">
-                  {{ notification.type === 'success' ? '✓' : 
-                     notification.type === 'error' ? '✗' : 
-                     notification.type === 'warning' ? '⚠' : 'ℹ' }}
-                </span>
-              </div>
-            </div>
-            <div class="ml-3 w-0 flex-1 pt-0.5">
-              <p class="text-sm font-medium text-gray-900">
-                {{ notification.title }}
-              </p>
-              <p class="mt-1 text-sm text-gray-500">
-                {{ notification.message }}
-              </p>
-            </div>
-            <div class="ml-4 flex-shrink-0 flex">
-              <button
-                @click="removeNotification(notification.id)"
-                class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <span class="sr-only">关闭</span>
-                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <AppNotifications />
   </div>
 </template>
 
@@ -114,13 +67,13 @@ import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import LoadingSpinner from './components/common/LoadingSpinner.vue'
+import AppNotifications from './components/ui/AppNotifications.vue'
 
 const router = useRouter()
 const isLoading = ref(true)
 const sidebarOpen = ref(false)
 const user = ref(null)
 const isAuthenticated = ref(false)
-const notifications = ref([])
 
 // 监听认证状态变化
 supabase.auth.onAuthStateChange(async (event, session) => {
@@ -169,37 +122,6 @@ onMounted(async () => {
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
 }
-
-// 通知管理
-const addNotification = (notification) => {
-  const id = Date.now()
-  notifications.value.push({ ...notification, id })
-  
-  // 自动移除通知
-  setTimeout(() => {
-    removeNotification(id)
-  }, 5000)
-}
-
-const removeNotification = (id) => {
-  const index = notifications.value.findIndex(n => n.id === id)
-  if (index > -1) {
-    notifications.value.splice(index, 1)
-  }
-}
-
-// 全局错误处理
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason)
-  addNotification({
-    type: 'error',
-    title: '系统错误',
-    message: '发生了未预期的错误，请刷新页面重试'
-  })
-})
-
-// 提供全局通知方法
-window.$notify = addNotification
 </script>
 
 <style scoped>

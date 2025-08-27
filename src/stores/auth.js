@@ -18,6 +18,7 @@ export const useAuthStore = defineStore('auth', () => {
       loading.value = true
       error.value = null
       
+      // 直接使用 Supabase Auth API
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -30,10 +31,23 @@ export const useAuthStore = defineStore('auth', () => {
       // 获取用户档案
       await fetchUserProfile()
       
-      return { success: true }
+      return { success: true, data: data.user }
     } catch (err) {
+      console.error('Login error:', err)
       error.value = err.message
-      return { success: false, error: err.message }
+      
+      // 处理常见的登录错误
+      let errorMessage = err.message
+      
+      if (errorMessage.includes('Invalid login credentials')) {
+        errorMessage = '邮箱或密码错误，请检查后重试'
+      } else if (errorMessage.includes('Email not confirmed')) {
+        errorMessage = '邮箱未验证，请检查邮箱并点击验证链接'
+      } else if (errorMessage.includes('Too many requests')) {
+        errorMessage = '登录尝试过于频繁，请稍后再试'
+      }
+      
+      return { success: false, error: errorMessage }
     } finally {
       loading.value = false
     }

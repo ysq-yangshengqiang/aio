@@ -111,11 +111,15 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { authService } from '../../services/auth.service.js'
+import { useAuthStore } from '@/stores/auth'
+import { authService } from '@/services/auth.service.js'
+import { useNotification } from '@/composables/useNotification.js'
 
+const { showNotification } = useNotification()
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const error = ref('')
 
@@ -128,23 +132,64 @@ const form = reactive({
 const handleLogin = async () => {
   if (loading.value) return
   
-  loading.value = true
+  // 清除之前的错误
   error.value = ''
   
+  // 基本验证
+  if (!form.email.trim()) {
+    error.value = '请输入邮箱地址'
+    return
+  }
+  
+  if (!form.password.trim()) {
+    error.value = '请输入密码'
+    return
+  }
+  
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    error.value = '请输入有效的邮箱地址'
+    return
+  }
+  
+  loading.value = true
+  
   try {
-    const result = await authService.signIn(form.email, form.password)
+    // 使用认证服务登录
+    const result = await authService.login(form.email, form.password)
     
     if (result.success) {
-      // 登录成功，重定向到仪表板
+      // 登录成功，显示成功消息
+      showNotification('登录成功！欢迎回来', 'success')
+      
+      // 等待认证状态同步
+      await authStore.init()
+      
+      // 重定向到仪表板
       router.push('/dashboard')
     } else {
+      // 登录失败，显示错误信息
       error.value = result.error || '登录失败，请检查邮箱和密码'
+      showNotification(error.value, 'error')
     }
   } catch (err) {
     console.error('Login error:', err)
     error.value = '登录过程中发生错误，请稍后重试'
+    showNotification(error.value, 'error')
   } finally {
     loading.value = false
   }
 }
+
+// 组件挂载时初始化认证状态
+onMounted(async () => {
+  try {
+    await authStore.init()
+    // 如果用户已经登录，直接跳转到仪表板
+    if (authStore.isAuthenticated) {
+      router.push('/dashboard')
+    }
+  } catch (error) {
+    console.error('初始化认证状态失败:', error)
+  }
+})
 </script>

@@ -95,9 +95,19 @@ export class AuthService extends BaseService {
    */
   async login(email, password) {
     try {
+      console.log('开始登录流程:', email)
+      
       const result = await signInWithEmail(email, password)
       
       if (result.success) {
+        console.log('登录成功:', result.data.user?.email)
+        
+        // 设置当前用户
+        this.currentUser = result.data.user
+        
+        // 同步用户资料
+        await this.syncUserProfile(result.data.user)
+        
         return {
           success: true,
           data: {
@@ -106,15 +116,40 @@ export class AuthService extends BaseService {
           }
         }
       } else {
+        console.error('登录失败:', result.error)
+        
+        // 处理常见的登录错误
+        let errorMessage = result.error || '登录失败'
+        
+        if (errorMessage.includes('Invalid login credentials')) {
+          errorMessage = '邮箱或密码错误，请检查后重试'
+        } else if (errorMessage.includes('Email not confirmed')) {
+          errorMessage = '邮箱未验证，请检查邮箱并点击验证链接'
+        } else if (errorMessage.includes('Too many requests')) {
+          errorMessage = '登录尝试过于频繁，请稍后再试'
+        } else if (errorMessage.includes('Network')) {
+          errorMessage = '网络连接异常，请检查网络后重试'
+        }
+        
         return {
           success: false,
-          error: result.error || '登录失败'
+          error: errorMessage
         }
       }
     } catch (error) {
+      console.error('登录异常:', error)
+      
+      let errorMessage = '登录过程中发生错误'
+      
+      if (error.message.includes('Network')) {
+        errorMessage = '网络连接失败，请检查网络设置'
+      } else if (error.message.includes('fetch')) {
+        errorMessage = '无法连接到服务器，请稍后重试'
+      }
+      
       return {
         success: false,
-        error: error.message
+        error: errorMessage
       }
     }
   }

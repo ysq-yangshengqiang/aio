@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { supabase } from '../lib/supabase.js'
+import { connectionService } from '@/services/connection.service.js'
 
 // 路由组件
-const LoginView = () => import('../views/auth/LoginView.vue')
+const LoginView = () => import('../views/Login.vue') // 使用主登录页面
 const RegisterView = () => import('../views/auth/RegisterView.vue')
 const ForgotPasswordView = () => import('../views/auth/ForgotPasswordView.vue')
 const DashboardView = () => import('../views/DashboardView.vue')
@@ -64,9 +65,22 @@ const routes = [
     props: true
   },
   {
+    path: '/okr/:id/edit',
+    name: 'okr-edit',
+    component: OKRCreateView, // 复用创建页面进行编辑
+    meta: { requiresAuth: true },
+    props: true
+  },
+  {
     path: '/chat',
     name: 'chat',
     component: ChatView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/recommendations',
+    name: 'recommendations',
+    component: () => import('../views/recommendations/RecommendationsView.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -94,6 +108,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/debug/database',
+    name: 'database-debug',
+    component: () => import('../views/debug/DatabaseDebugView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     redirect: '/dashboard'
@@ -115,18 +135,34 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach(async (to, from, next) => {
   try {
+    console.log(`导航到: ${to.path}`)
+    
     // 检查认证状态
     const { data: { session } } = await supabase.auth.getSession()
     const isAuthenticated = !!session?.user
+    
+    console.log(`认证状态: ${isAuthenticated ? '已认证' : '未认证'}`)
+
+    // 如果是第一次访问或长时间未活动，检查连接状态
+    if (to.path === '/' || (from.path === '/' && to.meta.requiresAuth)) {
+      const connectionStatus = await connectionService.checkAllConnections()
+      
+      if (connectionStatus.overall === 'error') {
+        console.warn('连接状态异常，但继续路由')
+        // 可以选择显示连接问题警告，但不阻止导航
+      }
+    }
 
     // 需要认证的路由
     if (to.meta.requiresAuth && !isAuthenticated) {
+      console.log('需要认证，重定向到登录页')
       next('/login')
       return
     }
 
     // 需要游客状态的路由（登录、注册等）
     if (to.meta.requiresGuest && isAuthenticated) {
+      console.log('用户已认证，重定向到仪表板')
       next('/dashboard')
       return
     }
@@ -134,7 +170,14 @@ router.beforeEach(async (to, from, next) => {
     next()
   } catch (error) {
     console.error('Router guard error:', error)
-    next('/login')
+    
+    // 如果是连接错误但不是认证相关的路由，允许继续
+    if (!to.meta.requiresAuth) {
+      next()
+    } else {
+      // 认证相关的路由出错时，重定向到登录页
+      next('/login')
+    }
   }
 })
 
