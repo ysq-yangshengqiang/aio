@@ -81,7 +81,7 @@
             <div class="relative w-24 h-24 mx-auto">
               <svg class="w-24 h-24 transform -rotate-90" viewBox="0 0 36 36">
                 <path class="text-gray-300" fill="currentColor" d="M18 2.0845 A 15.9155 15.9155 0 0 1 18 33.9155 A 15.9155 15.9155 0 0 1 18 2.0845 Z" stroke="currentColor" stroke-width="2" fill="none"/>
-                <path class="text-indigo-600" :stroke-dasharray="`${okr.progress}, 100`" fill="currentColor" d="M18 2.0845 A 15.9155 15.9155 0 0 1 18 33.9155 A 15.9155 15.9155 0 0 1 18 2.0845 Z" stroke="currentColor" stroke-width="2" fill="none"/>
+                <path class="text-indigo-600" :stroke-dasharray="`${okr.progress}, 100`" d="M18 2.0845 A 15.9155 15.9155 0 0 1 18 33.9155 A 15.9155 15.9155 0 0 1 18 2.0845 Z" stroke="currentColor" stroke-width="2" fill="none"/>
               </svg>
               <div class="absolute inset-0 flex items-center justify-center">
                 <span class="text-xl font-bold text-gray-900">{{ okr.progress }}%</span>
