@@ -18,196 +18,197 @@
         </div>
       </div>
     
-    <div class="space-y-8">
-      <!-- 连接测试 -->
-      <div class="bg-white shadow rounded-lg p-8 border border-gray-100">
-        <h2 class="text-xl font-semibold mb-6 flex items-center">
-          <div class="p-2 bg-green-500 rounded-lg mr-3">
-            <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          🔌 数据库连接测试
-        </h2>
-        <button 
-          @click="testConnection" 
-          :disabled="loading.connection"
-          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {{ loading.connection ? '测试中...' : '测试连接' }}
-        </button>
-        <div v-if="results.connection" class="mt-4">
-          <div :class="results.connection.connected ? 'text-green-600' : 'text-red-600'">
-            {{ results.connection.connected ? '✅ 连接成功' : '❌ 连接失败' }}
-          </div>
-          <div v-if="results.connection.error" class="text-red-600 text-sm mt-1">
-            {{ results.connection.error }}
-          </div>
-        </div>
-      </div>
-
-      <!-- OKR表检查 -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-semibold mb-4">OKR表结构检查</h2>
-        <button 
-          @click="checkOKRTable" 
-          :disabled="loading.okr"
-          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {{ loading.okr ? '检查中...' : '检查OKR表' }}
-        </button>
-        <div v-if="results.okr" class="mt-4">
-          <!-- 基本状态 -->
-          <div :class="results.okr.exists ? 'text-green-600' : 'text-red-600'">
-            {{ results.okr.exists ? '✅ 表存在' : '❌ 表不存在' }}
-          </div>
-          
-          <!-- 访问权限 -->
-          <div v-if="results.okr.accessible === false" class="text-yellow-600 text-sm mt-1">
-            ⚠️ 表存在但无法访问，可能是RLS权限问题
-          </div>
-          
-          <!-- 字段检查结果 -->
-          <div v-if="results.okr.hasRequiredFields === false" class="text-red-600 text-sm mt-1">
-            ❌ 缺少核心字段（title, user_id, status, progress）
-          </div>
-          <div v-else-if="results.okr.hasRequiredFields === true && results.okr.hasAllFields === false" class="text-orange-600 text-sm mt-1">
-            ⚠️ 核心字段存在，但缺少可选字段（category, priority等）
-          </div>
-          <div v-else-if="results.okr.hasAllFields === true" class="text-green-600 text-sm mt-1">
-            ✅ 所有字段完整
-          </div>
-          
-          <!-- 错误信息 -->
-          <div v-if="results.okr.error" class="text-red-600 text-sm mt-1 font-medium">
-            {{ results.okr.error }}
-          </div>
-          
-          <!-- 详细错误 -->
-          <div v-if="results.okr.structureError" class="text-orange-600 text-xs mt-1 bg-orange-50 p-2 rounded">
-            <strong>详细错误:</strong> {{ results.okr.structureError }}
-          </div>
-          
-          <!-- 错误代码 -->
-          <div v-if="results.okr.code" class="text-gray-500 text-xs mt-1">
-            错误代码: {{ results.okr.code }}
-          </div>
-          
-          <!-- 修复建议 -->
-          <div v-if="!results.okr.exists || results.okr.hasRequiredFields === false" class="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400">
-            <h4 class="text-sm font-medium text-blue-800">🔧 修复建议:</h4>
-            <p class="text-sm text-blue-700 mt-1">
-              请在Supabase SQL Editor中执行完整的表创建脚本。
-            </p>
-          </div>
-          
-          <div v-else-if="results.okr.partialStructure" class="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400">
-            <h4 class="text-sm font-medium text-yellow-800">🔧 修复建议:</h4>
-            <p class="text-sm text-yellow-700 mt-1">
-              表结构部分完整，建议执行字段补充脚本添加缺失字段。
-            </p>
-          </div>
-          
-          <!-- 示例记录 -->
-          <div v-if="results.okr.sampleRecord" class="mt-4">
-            <h3 class="font-semibold mb-2">示例记录结构：</h3>
-            <pre class="bg-gray-100 p-2 rounded text-xs overflow-auto">{{ JSON.stringify(results.okr.sampleRecord, null, 2) }}</pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Key Results表检查 -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-semibold mb-4">Key Results表结构检查</h2>
-        <button 
-          @click="checkKeyResultsTable" 
-          :disabled="loading.keyResults"
-          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {{ loading.keyResults ? '检查中...' : '检查Key Results表' }}
-        </button>
-        <div v-if="results.keyResults" class="mt-4">
-          <div :class="results.keyResults.exists ? 'text-green-600' : 'text-red-600'">
-            {{ results.keyResults.exists ? '✅ 表存在' : '❌ 表不存在' }}
-          </div>
-          <div v-if="results.keyResults.accessible === false" class="text-yellow-600 text-sm mt-1">
-            ⚠️ 表存在但无法访问，可能是权限问题
-          </div>
-          <div v-if="results.keyResults.hasRequiredFields === false" class="text-orange-600 text-sm mt-1">
-            ⚠️ 表结构可能不完整
-          </div>
-          <div v-if="results.keyResults.hasRequiredFields === true" class="text-green-600 text-sm mt-1">
-            ✅ 表结构完整
-          </div>
-          <div v-if="results.keyResults.error" class="text-red-600 text-sm mt-1">
-            {{ results.keyResults.error }}
-          </div>
-          <div v-if="results.keyResults.structureError" class="text-orange-600 text-sm mt-1">
-            结构错误: {{ results.keyResults.structureError }}
-          </div>
-        </div>
-      </div>
-
-      <!-- OKR创建测试 -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-semibold mb-4">OKR创建测试</h2>
-        <form @submit.prevent="testCreateOKR" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700">测试标题</label>
-            <input 
-              v-model="testOKR.title" 
-              type="text" 
-              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="测试OKR标题"
-            >
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700">测试描述</label>
-            <textarea 
-              v-model="testOKR.description"
-              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-              rows="3"
-              placeholder="测试OKR描述"
-            ></textarea>
-          </div>
+      <div class="space-y-8">
+        <!-- 连接测试 -->
+        <div class="bg-white shadow rounded-lg p-8 border border-gray-100">
+          <h2 class="text-xl font-semibold mb-6 flex items-center">
+            <div class="p-2 bg-green-500 rounded-lg mr-3">
+              <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            🔌 数据库连接测试
+          </h2>
           <button 
-            type="submit" 
-            :disabled="loading.create || !testOKR.title"
-            class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+            @click="testConnection" 
+            :disabled="loading.connection"
+            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
           >
-            {{ loading.create ? '创建中...' : '测试创建OKR' }}
+            {{ loading.connection ? '测试中...' : '测试连接' }}
           </button>
-        </form>
-        <div v-if="results.create" class="mt-4">
-          <div :class="results.create.success ? 'text-green-600' : 'text-red-600'">
-            {{ results.create.success ? '✅ 创建成功' : '❌ 创建失败' }}
-          </div>
-          <div v-if="results.create.error" class="text-red-600 text-sm mt-1">
-            {{ results.create.error }}
-          </div>
-          <div v-if="results.create.data" class="text-sm mt-1 bg-gray-100 p-2 rounded">
-            <pre>{{ JSON.stringify(results.create.data, null, 2) }}</pre>
+          <div v-if="results.connection" class="mt-4">
+            <div :class="results.connection.connected ? 'text-green-600' : 'text-red-600'">
+              {{ results.connection.connected ? '✅ 连接成功' : '❌ 连接失败' }}
+            </div>
+            <div v-if="results.connection.error" class="text-red-600 text-sm mt-1">
+              {{ results.connection.error }}
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- SQL执行区域 -->
-      <div class="bg-white shadow rounded-lg p-6">
-        <h2 class="text-lg font-semibold mb-4">紧急修复SQL</h2>
-        <p class="text-sm text-gray-600 mb-4">
-          如果表不存在或结构有问题，请在Supabase Dashboard的SQL Editor中执行以下SQL：
-        </p>
-        <textarea 
-          readonly
-          class="w-full h-64 font-mono text-sm border border-gray-300 rounded p-2 bg-gray-50"
-          :value="fixSQL"
-        ></textarea>
-        <button 
-          @click="copySQL" 
-          class="mt-2 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-        >
-          复制SQL
-        </button>
+        <!-- OKR表检查 -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-lg font-semibold mb-4">OKR表结构检查</h2>
+          <button 
+            @click="checkOKRTable" 
+            :disabled="loading.okr"
+            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {{ loading.okr ? '检查中...' : '检查OKR表' }}
+          </button>
+          <div v-if="results.okr" class="mt-4">
+            <!-- 基本状态 -->
+            <div :class="results.okr.exists ? 'text-green-600' : 'text-red-600'">
+              {{ results.okr.exists ? '✅ 表存在' : '❌ 表不存在' }}
+            </div>
+            
+            <!-- 访问权限 -->
+            <div v-if="results.okr.accessible === false" class="text-yellow-600 text-sm mt-1">
+              ⚠️ 表存在但无法访问，可能是RLS权限问题
+            </div>
+            
+            <!-- 字段检查结果 -->
+            <div v-if="results.okr.hasRequiredFields === false" class="text-red-600 text-sm mt-1">
+              ❌ 缺少核心字段（title, user_id, status, progress）
+            </div>
+            <div v-else-if="results.okr.hasRequiredFields === true && results.okr.hasAllFields === false" class="text-orange-600 text-sm mt-1">
+              ⚠️ 核心字段存在，但缺少可选字段（category, priority等）
+            </div>
+            <div v-else-if="results.okr.hasAllFields === true" class="text-green-600 text-sm mt-1">
+              ✅ 所有字段完整
+            </div>
+            
+            <!-- 错误信息 -->
+            <div v-if="results.okr.error" class="text-red-600 text-sm mt-1 font-medium">
+              {{ results.okr.error }}
+            </div>
+            
+            <!-- 详细错误 -->
+            <div v-if="results.okr.structureError" class="text-orange-600 text-xs mt-1 bg-orange-50 p-2 rounded">
+              <strong>详细错误:</strong> {{ results.okr.structureError }}
+            </div>
+            
+            <!-- 错误代码 -->
+            <div v-if="results.okr.code" class="text-gray-500 text-xs mt-1">
+              错误代码: {{ results.okr.code }}
+            </div>
+            
+            <!-- 修复建议 -->
+            <div v-if="!results.okr.exists || results.okr.hasRequiredFields === false" class="mt-3 p-3 bg-blue-50 border-l-4 border-blue-400">
+              <h4 class="text-sm font-medium text-blue-800">🔧 修复建议:</h4>
+              <p class="text-sm text-blue-700 mt-1">
+                请在Supabase SQL Editor中执行完整的表创建脚本。
+              </p>
+            </div>
+            
+            <div v-else-if="results.okr.partialStructure" class="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400">
+              <h4 class="text-sm font-medium text-yellow-800">🔧 修复建议:</h4>
+              <p class="text-sm text-yellow-700 mt-1">
+                表结构部分完整，建议执行字段补充脚本添加缺失字段。
+              </p>
+            </div>
+            
+            <!-- 示例记录 -->
+            <div v-if="results.okr.sampleRecord" class="mt-4">
+              <h3 class="font-semibold mb-2">示例记录结构：</h3>
+              <pre class="bg-gray-100 p-2 rounded text-xs overflow-auto">{{ JSON.stringify(results.okr.sampleRecord, null, 2) }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Key Results表检查 -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-lg font-semibold mb-4">Key Results表结构检查</h2>
+          <button 
+            @click="checkKeyResultsTable" 
+            :disabled="loading.keyResults"
+            class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {{ loading.keyResults ? '检查中...' : '检查Key Results表' }}
+          </button>
+          <div v-if="results.keyResults" class="mt-4">
+            <div :class="results.keyResults.exists ? 'text-green-600' : 'text-red-600'">
+              {{ results.keyResults.exists ? '✅ 表存在' : '❌ 表不存在' }}
+            </div>
+            <div v-if="results.keyResults.accessible === false" class="text-yellow-600 text-sm mt-1">
+              ⚠️ 表存在但无法访问，可能是权限问题
+            </div>
+            <div v-if="results.keyResults.hasRequiredFields === false" class="text-orange-600 text-sm mt-1">
+              ⚠️ 表结构可能不完整
+            </div>
+            <div v-if="results.keyResults.hasRequiredFields === true" class="text-green-600 text-sm mt-1">
+              ✅ 表结构完整
+            </div>
+            <div v-if="results.keyResults.error" class="text-red-600 text-sm mt-1">
+              {{ results.keyResults.error }}
+            </div>
+            <div v-if="results.keyResults.structureError" class="text-orange-600 text-sm mt-1">
+              结构错误: {{ results.keyResults.structureError }}
+            </div>
+          </div>
+        </div>
+
+        <!-- OKR创建测试 -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-lg font-semibold mb-4">OKR创建测试</h2>
+          <form @submit.prevent="testCreateOKR" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">测试标题</label>
+              <input 
+                v-model="testOKR.title" 
+                type="text" 
+                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="测试OKR标题"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">测试描述</label>
+              <textarea 
+                v-model="testOKR.description"
+                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                rows="3"
+                placeholder="测试OKR描述"
+              ></textarea>
+            </div>
+            <button 
+              type="submit" 
+              :disabled="loading.create || !testOKR.title"
+              class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+            >
+              {{ loading.create ? '创建中...' : '测试创建OKR' }}
+            </button>
+          </form>
+          <div v-if="results.create" class="mt-4">
+            <div :class="results.create.success ? 'text-green-600' : 'text-red-600'">
+              {{ results.create.success ? '✅ 创建成功' : '❌ 创建失败' }}
+            </div>
+            <div v-if="results.create.error" class="text-red-600 text-sm mt-1">
+              {{ results.create.error }}
+            </div>
+            <div v-if="results.create.data" class="text-sm mt-1 bg-gray-100 p-2 rounded">
+              <pre>{{ JSON.stringify(results.create.data, null, 2) }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- SQL执行区域 -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h2 class="text-lg font-semibold mb-4">紧急修复SQL</h2>
+          <p class="text-sm text-gray-600 mb-4">
+            如果表不存在或结构有问题，请在Supabase Dashboard的SQL Editor中执行以下SQL：
+          </p>
+          <textarea 
+            readonly
+            class="w-full h-64 font-mono text-sm border border-gray-300 rounded p-2 bg-gray-50"
+            :value="fixSQL"
+          ></textarea>
+          <button 
+            @click="copySQL" 
+            class="mt-2 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+          >
+            复制SQL
+          </button>
+        </div>
       </div>
     </div>
   </div>
