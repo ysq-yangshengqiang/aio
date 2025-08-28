@@ -175,7 +175,7 @@
     />
 
     <!-- 删除确认模态框 -->
-    <ConfirmModal
+    <ConfirmDialog
       v-if="showDeleteConfirm"
       title="删除工作流"
               :message="`确定要删除工作流 '${deletingWorkflow?.workflow_name}' 吗？此操作不可撤销。`"
@@ -194,7 +194,7 @@ import { chatAIService } from '../../services/chat-ai.service.js'
 import LoadingSpinner from '../../components/common/LoadingSpinner.vue'
 import WorkflowModal from '../../components/chat/WorkflowModal.vue'
 import TestResultModal from '../../components/chat/TestResultModal.vue'
-import ConfirmModal from '../../components/common/ConfirmModal.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import {
   PlusIcon,
   CogIcon,
