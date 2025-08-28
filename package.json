@@ -26,6 +26,7 @@
     "element-plus": "^2.11.1",
     "framer-motion": "^12.23.12",
     "lodash-es": "^4.17.21",
+    "marked": "^16.2.1",
     "nanoid": "^5.0.4",
     "pinia": "^2.1.7",
     "vue": "^3.4.0",

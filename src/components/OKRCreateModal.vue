@@ -2,7 +2,7 @@
   <!-- 弹窗遮罩 -->
   <div 
     v-if="isVisible" 
-    class="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-10"
+    class="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-20"
     @click="closeModal"
   >
     <div class="flex min-h-screen items-center justify-center p-4">

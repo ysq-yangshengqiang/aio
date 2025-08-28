@@ -135,11 +135,15 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { authService } from '../../services/auth.service.js'
+import { useAuthStore } from '@/stores/auth'
+import { authService } from '@/services/auth.service.js'
+import { useNotification } from '@/composables/useNotification.js'
 
+const { showNotification } = useNotification()
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const error = ref('')
 
@@ -154,14 +158,37 @@ const form = reactive({
 const handleRegister = async () => {
   if (loading.value) return
   
-  // 验证表单
-  if (form.password !== form.confirmPassword) {
-    error.value = '两次输入的密码不一致'
+  // 清除之前的错误
+  error.value = ''
+  
+  // 基本验证
+  if (!form.fullName.trim()) {
+    error.value = '请输入姓名'
+    return
+  }
+  
+  if (!form.email.trim()) {
+    error.value = '请输入邮箱地址'
+    return
+  }
+  
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    error.value = '请输入有效的邮箱地址'
+    return
+  }
+  
+  if (!form.password.trim()) {
+    error.value = '请输入密码'
     return
   }
   
   if (form.password.length < 6) {
     error.value = '密码长度至少为6位'
+    return
+  }
+  
+  if (form.password !== form.confirmPassword) {
+    error.value = '两次输入的密码不一致'
     return
   }
   
@@ -171,24 +198,53 @@ const handleRegister = async () => {
   }
   
   loading.value = true
-  error.value = ''
   
   try {
-    const result = await authService.signUp(form.email, form.password, {
-      full_name: form.fullName
+    // 使用认证服务注册
+    const result = await authService.register({
+      email: form.email,
+      password: form.password,
+      name: form.fullName
     })
     
     if (result.success) {
-      // 注册成功，重定向到仪表板
-      router.push('/dashboard')
+      // 注册成功，显示成功消息
+      showNotification('注册成功！请查收邮箱验证邮件', 'success')
+      
+      // 如果用户立即可用（邮箱验证可能自动完成），则同步状态
+      if (result.data?.user) {
+        await authStore.init()
+        // 重定向到仪表板
+        router.push('/dashboard')
+      } else {
+        // 等待邮箱验证，重定向到登录页
+        showNotification('请先验证邮箱再登录', 'info')
+        router.push('/login')
+      }
     } else {
-      error.value = result.error || '注册失败，请稍后重试'
+      // 注册失败，显示错误信息
+      error.value = result.error || '注册失败，请检查信息后重试'
+      showNotification(error.value, 'error')
     }
   } catch (err) {
     console.error('Register error:', err)
     error.value = '注册过程中发生错误，请稍后重试'
+    showNotification(error.value, 'error')
   } finally {
     loading.value = false
   }
 }
+
+// 组件挂载时检查认证状态
+onMounted(async () => {
+  try {
+    await authStore.init()
+    // 如果用户已经登录，直接跳转到仪表板
+    if (authStore.isAuthenticated) {
+      router.push('/dashboard')
+    }
+  } catch (error) {
+    console.error('初始化认证状态失败:', error)
+  }
+})
 </script>

@@ -78,6 +78,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/chat/workflow-manager',
+    name: 'workflow-manager',
+    component: () => import('../views/chat/WorkflowManagerView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/recommendations',
     name: 'recommendations',
     component: () => import('../views/recommendations/RecommendationsView.vue'),

@@ -4,10 +4,217 @@
  */
 import { BaseService } from './base.service.js'
 import { supabase, getCurrentUser } from '../lib/supabase.js'
+import { aiConfigService } from './ai-config.service.js'
 
 export class AIService extends BaseService {
   constructor() {
     super('ai_recommendations')
+    this.n8nWebhookUrl = 'https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca20842'
+  }
+
+  /**
+   * 通过 n8n webhook 进行 AI 对话
+   * @param {string} message - 用户消息
+   * @param {Object} options - 对话选项
+   * @returns {Promise<Object>} 对话结果
+   */
+  async chat(message, options = {}) {
+    try {
+      const user = await getCurrentUser()
+      if (!user) {
+        return {
+          success: false,
+          error: '用户未登录'
+        }
+      }
+
+      // 获取用户的 AI 配置
+      const configResult = await aiConfigService.getDefaultConfiguration()
+      if (!configResult.success) {
+        return {
+          success: false,
+          error: '获取AI配置失败: ' + configResult.error
+        }
+      }
+
+      const config = configResult.data
+      const {
+        sessionId = null,
+        context = null
+      } = options
+
+      // 准备发送到 n8n 的数据
+      const payload = {
+        message: message,
+        user_id: user.id,
+        session_id: sessionId,
+        config: {
+          model_provider: config.model_provider,
+          model_name: config.model_name,
+          temperature: config.temperature,
+          max_tokens: config.max_tokens,
+          system_prompt: config.system_prompt,
+          ...config.configuration
+        },
+        context: context,
+        timestamp: new Date().toISOString()
+      }
+
+      // 调用 n8n webhook
+      const response = await fetch(this.n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        throw new Error(`n8n webhook 调用失败: ${response.status} ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      return {
+        success: true,
+        data: {
+          message: result.response || result.message,
+          session_id: result.session_id || sessionId,
+          tokens: result.tokens,
+          latency: result.latency,
+          model_used: result.model_used,
+          metadata: result.metadata
+        }
+      }
+    } catch (error) {
+      console.error('AI chat error:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * 流式对话（如果 n8n 支持）
+   * @param {string} message - 用户消息
+   * @param {Function} onChunk - 接收数据块的回调
+   * @param {Object} options - 对话选项
+   * @returns {Promise<Object>} 对话结果
+   */
+  async chatStream(message, onChunk, options = {}) {
+    try {
+      const user = await getCurrentUser()
+      if (!user) {
+        return {
+          success: false,
+          error: '用户未登录'
+        }
+      }
+
+      // 获取用户的 AI 配置
+      const configResult = await aiConfigService.getDefaultConfiguration()
+      if (!configResult.success) {
+        return {
+          success: false,
+          error: '获取AI配置失败: ' + configResult.error
+        }
+      }
+
+      const config = configResult.data
+      const {
+        sessionId = null,
+        context = null
+      } = options
+
+      // 准备发送到 n8n 的数据
+      const payload = {
+        message: message,
+        user_id: user.id,
+        session_id: sessionId,
+        stream: true,
+        config: {
+          model_provider: config.model_provider,
+          model_name: config.model_name,
+          temperature: config.temperature,
+          max_tokens: config.max_tokens,
+          system_prompt: config.system_prompt,
+          ...config.configuration
+        },
+        context: context,
+        timestamp: new Date().toISOString()
+      }
+
+      // 调用 n8n webhook
+      const response = await fetch(this.n8nWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        throw new Error(`n8n webhook 调用失败: ${response.status} ${response.statusText}`)
+      }
+
+      // 如果支持流式响应
+      if (response.body && typeof response.body.getReader === 'function') {
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let fullResponse = ''
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            fullResponse += chunk
+            
+            if (onChunk) {
+              onChunk(chunk)
+            }
+          }
+
+          return {
+            success: true,
+            data: {
+              message: fullResponse,
+              session_id: sessionId,
+              stream: true
+            }
+          }
+        } finally {
+          reader.releaseLock()
+        }
+      } else {
+        // 如果不支持流式，回退到普通响应
+        const result = await response.json()
+        
+        if (onChunk) {
+          onChunk(result.response || result.message)
+        }
+
+        return {
+          success: true,
+          data: {
+            message: result.response || result.message,
+            session_id: result.session_id || sessionId,
+            tokens: result.tokens,
+            latency: result.latency,
+            model_used: result.model_used,
+            metadata: result.metadata
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AI chat stream error:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
   }
 
   /**

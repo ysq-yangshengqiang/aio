@@ -5,6 +5,8 @@
  */
 import { BaseService } from './base.service.js'
 import { supabase, getCurrentUser } from '../lib/supabase.js'
+import { aiConfigService } from './ai-config.service.js'
+import { aiService } from './ai.service.js'
 
 export class ChatService extends BaseService {
   constructor() {
@@ -29,7 +31,6 @@ export class ChatService extends BaseService {
       const newSession = {
         user_id: user.id,
         title: sessionData.title || '新对话',
-        context: sessionData.context || {},
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }
@@ -216,7 +217,6 @@ export class ChatService extends BaseService {
         session_id: sessionId,
         role,
         content,
-        metadata,
         created_at: new Date().toISOString()
       }
 
@@ -228,13 +228,12 @@ export class ChatService extends BaseService {
           updated_at: new Date().toISOString()
         })
 
-        // 如果是用户消息，可以在这里调用AI服务生成回复
+        // 如果是用户消息，自动生成AI回复
         if (role === 'user') {
-          // TODO: 集成AI服务生成回复
-          // const aiResponse = await this.generateAIResponse(sessionId, content)
-          // if (aiResponse.success) {
-          //   await this.sendMessage(sessionId, aiResponse.data.content, 'assistant')
-          // }
+          const aiResponse = await this.generateAIResponse(sessionId, content)
+          if (aiResponse.success) {
+            await this.sendMessage(sessionId, aiResponse.data.content, 'assistant', aiResponse.data.metadata)
+          }
         }
       }
 
@@ -441,39 +440,35 @@ export class ChatService extends BaseService {
   }
 
   /**
-   * 生成AI回复 (模拟实现)
+   * 生成AI回复
    * @param {string} sessionId - 会话ID
    * @param {string} userMessage - 用户消息
    * @returns {Promise<Object>} AI回复结果
    */
   async generateAIResponse(sessionId, userMessage) {
     try {
-      // 这里应该集成实际的AI服务，比如OpenAI API
-      // 目前提供模拟实现
-      
-      const responses = [
-        '我理解您的问题，让我来帮助您分析一下。',
-        '这是一个很好的问题！根据您的学习目标，我建议...',
-        '让我为您提供一些建议和指导。',
-        '基于您的情况，我认为可以从以下几个方面来考虑...',
-        '很高兴能够帮助您！这个问题涉及到...'
-      ]
+      // 获取会话历史消息作为上下文
+      const messagesResult = await this.getSessionMessages(sessionId, { limit: 10 })
+      const context = messagesResult.success ? messagesResult.data : []
 
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+      // 使用 AI 服务生成回复
+      const response = await aiService.chat(userMessage, sessionId, context)
 
-      // 模拟API延迟
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      return {
-        success: true,
-        data: {
-          content: randomResponse,
-          metadata: {
-            model: 'gpt-3.5-turbo',
-            timestamp: new Date().toISOString()
+      if (response.success) {
+        return {
+          success: true,
+          data: {
+            content: response.data.content,
+            metadata: {
+              timestamp: new Date().toISOString(),
+              session_id: sessionId,
+              ...response.data.metadata
+            }
           }
         }
       }
+
+      return response
     } catch (error) {
       return {
         success: false,
@@ -481,6 +476,7 @@ export class ChatService extends BaseService {
       }
     }
   }
+
 
   /**
    * 清理旧会话

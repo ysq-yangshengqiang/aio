@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { supabase } from '@/lib/supabase'
+import { authService } from '@/services/auth.service.js'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -18,64 +18,43 @@ export const useAuthStore = defineStore('auth', () => {
       loading.value = true
       error.value = null
       
-      // 直接使用 Supabase Auth API
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
+      const result = await authService.login(email, password)
       
-      if (authError) throw authError
-      
-      user.value = data.user
-      
-      // 获取用户档案
-      await fetchUserProfile()
-      
-      return { success: true, data: data.user }
-    } catch (err) {
-      console.error('Login error:', err)
-      error.value = err.message
-      
-      // 处理常见的登录错误
-      let errorMessage = err.message
-      
-      if (errorMessage.includes('Invalid login credentials')) {
-        errorMessage = '邮箱或密码错误，请检查后重试'
-      } else if (errorMessage.includes('Email not confirmed')) {
-        errorMessage = '邮箱未验证，请检查邮箱并点击验证链接'
-      } else if (errorMessage.includes('Too many requests')) {
-        errorMessage = '登录尝试过于频繁，请稍后再试'
+      if (result.success) {
+        user.value = result.data.user
+        // 获取用户档案
+        await fetchUserProfile()
+        return { success: true, data: result.data.user }
+      } else {
+        error.value = result.error
+        return { success: false, error: result.error }
       }
-      
-      return { success: false, error: errorMessage }
+    } catch (err) {
+      console.error('Store login error:', err)
+      error.value = err.message
+      return { success: false, error: err.message }
     } finally {
       loading.value = false
     }
   }
 
   // 注册
-  const register = async (email, password, userData = {}) => {
+  const register = async (userData) => {
     try {
       loading.value = true
       error.value = null
       
-      const { data, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: userData
-        }
-      })
+      const result = await authService.register(userData)
       
-      if (authError) throw authError
-      
-      user.value = data.user
-      
-      // 创建用户档案
-      await createUserProfile(userData)
-      
-      return { success: true }
+      if (result.success) {
+        user.value = result.data?.user || null
+        return { success: true, data: result.data }
+      } else {
+        error.value = result.error
+        return { success: false, error: result.error }
+      }
     } catch (err) {
+      console.error('Store register error:', err)
       error.value = err.message
       return { success: false, error: err.message }
     } finally {
@@ -86,27 +65,42 @@ export const useAuthStore = defineStore('auth', () => {
   // 登出
   const logout = async () => {
     try {
-      await supabase.auth.signOut()
-      user.value = null
-      error.value = null
+      loading.value = true
+      const result = await authService.logout()
+      
+      if (result.success) {
+        user.value = null
+        userProfile.value = null
+        error.value = null
+        return { success: true }
+      } else {
+        error.value = result.error
+        return { success: false, error: result.error }
+      }
     } catch (err) {
+      console.error('Store logout error:', err)
       error.value = err.message
+      return { success: false, error: err.message }
+    } finally {
+      loading.value = false
     }
   }
 
   // 检查当前会话
   const checkAuth = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        user.value = session.user
+      const result = await authService.getCurrentUser()
+      if (result.success) {
+        user.value = result.data
+        userProfile.value = result.data.profile
       } else {
-        // 如果没有会话，设置为null
         user.value = null
+        userProfile.value = null
       }
     } catch (err) {
       console.error('Auth check failed:', err)
       user.value = null
+      userProfile.value = null
     }
   }
 
@@ -115,100 +109,40 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       if (!user.value) return
       
-      // 如果是模拟用户，创建模拟档案
-      if (user.value.id === 'mock-user-id') {
-        userProfile.value = {
-          id: 'mock-profile-id',
-          user_id: user.value.id,
-          name: '测试用户',
-          student_id: '2024001',
-          role: 'student',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-        return
+      // 这里可以实现获取用户档案的逻辑
+      // 暂时使用基本信息
+      userProfile.value = {
+        id: user.value.id,
+        email: user.value.email,
+        name: user.value.user_metadata?.name || user.value.email.split('@')[0],
+        role: user.value.user_metadata?.role || 'student',
+        created_at: user.value.created_at,
+        updated_at: user.value.updated_at
       }
-      
-      const { data, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', user.value.id)
-        .single()
-      
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Fetch profile error:', profileError)
-        return
-      }
-      
-      userProfile.value = data
     } catch (err) {
       console.error('Fetch profile error:', err)
-    }
-  }
-
-  // 创建用户档案
-  const createUserProfile = async (userData) => {
-    try {
-      if (!user.value) return
-      
-      // 如果是模拟用户，创建模拟档案
-      if (user.value.id === 'mock-user-id') {
-        userProfile.value = {
-          id: 'mock-profile-id',
-          user_id: user.value.id,
-          name: userData.name || '测试用户',
-          student_id: userData.student_id || '2024001',
-          role: 'student',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-        return
-      }
-      
-      const { data, error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          user_id: user.value.id,
-          name: userData.name,
-          student_id: userData.student_id,
-          role: 'student'
-        })
-        .select()
-        .single()
-      
-      if (profileError) {
-        console.error('Create profile error:', profileError)
-        return
-      }
-      
-      userProfile.value = data
-    } catch (err) {
-      console.error('Create profile error:', err)
     }
   }
 
   // 更新用户档案
   const updateUserProfile = async (updates) => {
     try {
-      if (!user.value || !userProfile.value) return
+      loading.value = true
+      const result = await authService.updateProfile(updates)
       
-      const { data, error: profileError } = await supabase
-        .from('user_profiles')
-        .update(updates)
-        .eq('user_id', user.value.id)
-        .select()
-        .single()
-      
-      if (profileError) {
-        console.error('Update profile error:', profileError)
-        return
+      if (result.success) {
+        userProfile.value = { ...userProfile.value, ...updates }
+        return { success: true, data: result.data }
+      } else {
+        error.value = result.error
+        return { success: false, error: result.error }
       }
-      
-      userProfile.value = data
-      return { success: true, data }
     } catch (err) {
       console.error('Update profile error:', err)
+      error.value = err.message
       return { success: false, error: err.message }
+    } finally {
+      loading.value = false
     }
   }
 
@@ -216,23 +150,6 @@ export const useAuthStore = defineStore('auth', () => {
   const init = async () => {
     try {
       await checkAuth()
-      
-      if (user.value) {
-        await fetchUserProfile()
-      }
-      
-      // 监听认证状态变化
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN') {
-          user.value = session?.user || null
-          if (user.value) {
-            await fetchUserProfile()
-          }
-        } else if (event === 'SIGNED_OUT') {
-          user.value = null
-          userProfile.value = null
-        }
-      })
     } catch (error) {
       console.error('Auth init error:', error)
     }
@@ -250,7 +167,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     fetchUserProfile,
-    createUserProfile,
     updateUserProfile,
     init
   }

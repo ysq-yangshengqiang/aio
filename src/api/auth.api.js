@@ -1,5 +1,5 @@
 import BaseAPI from './base.api.js'
-import AuthService from '@/services/auth.service.js'
+import { authService } from '@/services/auth.service.js'
 import AnalyticsService from '@/services/analytics.service.js'
 import NotificationService from '@/services/notification.service.js'
 
@@ -14,7 +14,7 @@ class AuthAPI extends BaseAPI {
     try {
       this.validateRequired(credentials, ['email', 'password'])
       
-      const result = await AuthService.login(credentials.email, credentials.password)
+      const result = await authService.login(credentials.email, credentials.password)
       
       if (result.success) {
         // 记录登录事件
@@ -25,7 +25,7 @@ class AuthAPI extends BaseAPI {
         
         // 更新最后活跃时间
         if (result.data.profile) {
-          await AuthService.updateUserProfile(result.data.user.id, {
+          await authService.updateProfile({
             last_active_at: new Date().toISOString()
           })
         }
@@ -44,11 +44,7 @@ class AuthAPI extends BaseAPI {
     try {
       this.validateRequired(userData, ['email', 'password', 'name'])
       
-      const result = await AuthService.register(
-        userData.email, 
-        userData.password, 
-        this.cleanData(userData)
-      )
+      const result = await authService.register(this.cleanData(userData))
       
       if (result.success) {
         // 记录注册事件
@@ -75,7 +71,7 @@ class AuthAPI extends BaseAPI {
    */
   async logout(userId) {
     try {
-      const result = await AuthService.logout()
+      const result = await authService.logout()
       
       if (result.success && userId) {
         // 记录登出事件
@@ -95,22 +91,12 @@ class AuthAPI extends BaseAPI {
    */
   async getCurrentUser() {
     try {
-      const sessionResult = await AuthService.getCurrentSession()
-      if (!sessionResult.success || !sessionResult.data) {
+      const result = await authService.getCurrentUser()
+      if (!result.success) {
         return { success: false, error: 'No active session' }
       }
-
-      const user = sessionResult.data.user
-      const profileResult = await AuthService.getUserProfile(user.id)
       
-      return this.handleResponse({
-        success: true,
-        data: {
-          user,
-          profile: profileResult.success ? profileResult.data : null,
-          session: sessionResult.data
-        }
-      })
+      return this.handleResponse(result)
     } catch (error) {
       return this.handleError(error)
     }
@@ -122,7 +108,7 @@ class AuthAPI extends BaseAPI {
   async updateProfile(userId, updates) {
     try {
       const cleanedUpdates = this.cleanData(updates)
-      const result = await AuthService.updateUserProfile(userId, cleanedUpdates)
+      const result = await authService.updateProfile(cleanedUpdates)
       
       if (result.success) {
         // 记录档案更新事件
@@ -145,7 +131,7 @@ class AuthAPI extends BaseAPI {
     try {
       this.validateRequired({ email }, ['email'])
       
-      const result = await AuthService.resetPassword(email)
+      const result = await authService.resetPassword(email)
       
       if (result.success) {
         // 记录密码重置请求事件
@@ -168,7 +154,7 @@ class AuthAPI extends BaseAPI {
     try {
       this.validateRequired({ newPassword }, ['newPassword'])
       
-      const result = await AuthService.updatePassword(newPassword)
+      const result = await authService.updatePassword(newPassword)
       
       if (result.success) {
         // 记录密码更新事件
@@ -196,7 +182,7 @@ class AuthAPI extends BaseAPI {
    */
   async validateSession() {
     try {
-      const result = await AuthService.getCurrentSession()
+      const result = await authService.getSession()
       return this.handleResponse(result)
     } catch (error) {
       return this.handleError(error)
@@ -208,11 +194,11 @@ class AuthAPI extends BaseAPI {
    */
   async refreshProfile(userId) {
     try {
-      const result = await AuthService.getUserProfile(userId)
+      const result = await authService.getCurrentUser()
       
       if (result.success) {
         // 更新最后活跃时间
-        await AuthService.updateUserProfile(userId, {
+        await authService.updateProfile({
           last_active_at: new Date().toISOString()
         })
       }

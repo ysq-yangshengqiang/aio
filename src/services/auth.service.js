@@ -48,32 +48,95 @@ export class AuthService extends BaseService {
    */
   async syncUserProfile(user) {
     try {
+      const fullName = user.user_metadata?.full_name || 
+                      user.user_metadata?.name || 
+                      user.email.split('@')[0]
+
+      console.log('开始同步用户资料:', user.id, fullName)
+
+      // 直接使用 Supabase 客户端插入，避免复杂的数据库函数
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('检查用户资料失败:', checkError)
+      }
+
+      if (!existingProfile) {
+        // 用户资料不存在，创建新的
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .insert({
+            user_id: user.id,
+            full_name: fullName,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (error) {
+          console.error('创建用户资料失败:', error)
+        } else {
+          console.log('用户资料创建成功:', data)
+          
+          // 尝试创建成长画像
+          try {
+            await supabase
+              .from('growth_profiles')
+              .insert({
+                user_id: user.id,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+          } catch (growthError) {
+            console.warn('创建成长画像失败，但不影响主流程:', growthError)
+          }
+        }
+      } else {
+        console.log('用户资料已存在，跳过创建')
+      }
+    } catch (error) {
+      console.error('同步用户资料异常:', error)
+    }
+  }
+
+  /**
+   * 备用的用户资料创建方法
+   * @param {Object} user - Supabase用户对象
+   * @param {string} fullName - 用户全名
+   */
+  async fallbackCreateProfile(user, fullName) {
+    try {
+      // 检查 user_profiles 表是否存在记录
       const { data: existingProfile } = await supabase
-        .from('users')
+        .from('user_profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .single()
 
       if (!existingProfile) {
-        // 创建新用户资料
+        // 直接插入到 user_profiles 表
         const { error } = await supabase
-          .from('users')
+          .from('user_profiles')
           .insert({
-            id: user.id,
-            email: user.email,
-            name: user.user_metadata?.name || user.email.split('@')[0],
-            avatar: user.user_metadata?.avatar_url || null,
-            role: 'student',
+            user_id: user.id,
+            full_name: fullName,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
 
         if (error) {
-          console.error('创建用户资料失败:', error)
+          console.error('备用创建用户资料失败:', error)
+        } else {
+          console.log('备用用户资料创建成功')
         }
       }
     } catch (error) {
-      console.error('同步用户资料失败:', error)
+      console.error('备用用户资料创建异常:', error)
     }
   }
 
@@ -164,6 +227,7 @@ export class AuthService extends BaseService {
       const { email, password, name } = userData
 
       const result = await signUpWithEmail(email, password, {
+        full_name: name,  // 使用 full_name 而不是 name
         name: name
       })
 
@@ -236,9 +300,9 @@ export class AuthService extends BaseService {
       if (user) {
         // 获取完整的用户资料
         const { data: profile, error } = await supabase
-          .from('users')
+          .from('user_profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .single()
 
         if (error && error.code !== 'PGRST116') {
@@ -282,8 +346,9 @@ export class AuthService extends BaseService {
       }
 
       // 更新Supabase用户元数据
-      if (updates.name || updates.avatar) {
+      if (updates.full_name || updates.name || updates.avatar) {
         const metadataUpdates = {}
+        if (updates.full_name) metadataUpdates.full_name = updates.full_name
         if (updates.name) metadataUpdates.name = updates.name
         if (updates.avatar) metadataUpdates.avatar_url = updates.avatar
 
@@ -300,13 +365,18 @@ export class AuthService extends BaseService {
       }
 
       // 更新用户资料表
+      const profileUpdates = { ...updates }
+      if (updates.name && !updates.full_name) {
+        profileUpdates.full_name = updates.name
+      }
+      
       const { data, error } = await supabase
-        .from('users')
+        .from('user_profiles')
         .update({
-          ...updates,
+          ...profileUpdates,
           updated_at: new Date().toISOString()
         })
-        .eq('id', currentUser.id)
+        .eq('user_id', currentUser.id)
         .select()
         .single()
 
