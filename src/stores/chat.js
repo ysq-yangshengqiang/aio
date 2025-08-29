@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, triggerRef } from 'vue'
 import { supabase, getCurrentUser } from '../lib/supabase.js'
 import { useAuthStore } from './auth.js'
 import { chatService } from '../services/chat.service.js'
@@ -212,6 +212,158 @@ export const useChatStore = defineStore('chat', () => {
       error.value = err.message
       console.error('加载消息失败:', err)
       return { success: false, error: err.message }
+    }
+  }
+
+  const sendMessageStream = async (content, callbacks = {}) => {
+    console.log('=== 开始sendMessageStream ===') // 调试日志
+    console.log('content:', content) // 调试日志
+    console.log('currentSession:', currentSession.value) // 调试日志
+    
+    if (!currentSession.value || !content?.trim()) {
+      console.log('无效的会话或消息内容') // 调试日志
+      return { success: false, error: '无效的会话或消息内容' }
+    }
+    
+    const { onChunk, onStatus } = callbacks
+    console.log('callbacks:', { onChunk: !!onChunk, onStatus: !!onStatus }) // 调试日志
+    
+    try {
+      isTyping.value = true
+      error.value = null
+      
+      const messageContent = content.trim()
+      
+      // 1. 创建并保存用户消息
+      if (onStatus) onStatus({ step: 1, message: '准备AI配置...' })
+      
+      const userMessageResult = await chatService.sendMessage(
+        currentSession.value.id,
+        messageContent,
+        'user'
+      )
+      
+      if (!userMessageResult.success) {
+        throw new Error(userMessageResult.error)
+      }
+      
+      const userMessage = userMessageResult.data
+      messages.value.push(userMessage)
+      
+      await nextTick()
+      
+      // 2. 构建上下文（简化版）
+      const context = {}
+      
+      // 3. 创建流式AI消息占位符
+      console.log('创建流式AI消息占位符') // 调试日志
+      isStreaming.value = true
+      streamingMessage.value = {
+        id: `temp_${Date.now()}`,
+        role: 'assistant',
+        content: '',
+        session_id: currentSession.value.id,
+        created_at: new Date().toISOString(),
+        metadata: { streaming: true }
+      }
+      messages.value.push(streamingMessage.value)
+      console.log('流式消息已添加到messages:', streamingMessage.value) // 调试日志
+      console.log('当前messages数量:', messages.value.length) // 调试日志
+      
+      // 4. 使用chatAIService进行流式调用
+      const { chatAIService } = await import('../services/chat-ai.service.js')
+      
+      const aiResponse = await chatAIService.generateStreamResponse(
+        messageContent,
+        {
+          session_id: currentSession.value.id,
+          provider: aiConfig.value.model_provider || 'n8n',
+          model_name: aiConfig.value.model_name,
+          temperature: aiConfig.value.temperature,
+          max_tokens: aiConfig.value.max_tokens
+        },
+        context,
+        (chunk) => {
+          console.log('=== 收到流式chunk ===', chunk)
+          if (streamingMessage.value) {
+            console.log('直接更新streamingMessage内容')
+            
+            // 最简单的更新方式
+            streamingMessage.value.content = chunk
+            
+            // 立即更新messages数组中对应的消息
+            const messageIndex = messages.value.findIndex(m => m.id === streamingMessage.value.id)
+            if (messageIndex >= 0) {
+              console.log('更新messages数组索引:', messageIndex)
+              messages.value[messageIndex].content = chunk
+              console.log('更新后内容长度:', messages.value[messageIndex].content.length)
+            }
+            
+            if (onChunk) onChunk(chunk)
+          }
+        },
+        onStatus
+      )
+      
+      if (aiResponse.success) {
+        // 5. 保存AI回复消息到数据库
+        const assistantMessageResult = await chatService.sendMessage(
+          currentSession.value.id,
+          aiResponse.data.content,
+          'assistant',
+          aiResponse.data.metadata
+        )
+        
+        if (assistantMessageResult.success) {
+          const assistantMessage = assistantMessageResult.data
+          
+          // 更新流式消息为实际消息
+          if (streamingMessage.value) {
+            const messageIndex = messages.value.findIndex(m => m.id === streamingMessage.value.id)
+            if (messageIndex >= 0) {
+              // 创建新的消息对象，移除流式标识
+              const finalMessage = {
+                ...assistantMessage,
+                metadata: {
+                  ...assistantMessage.metadata,
+                  streaming: false // 明确标记为非流式
+                }
+              }
+              messages.value[messageIndex] = finalMessage
+            }
+            streamingMessage.value = null
+          }
+          
+          isStreaming.value = false
+          
+          // 更新会话活动时间
+          updateSessionLastActivity()
+          
+          return { success: true, data: assistantMessage }
+        } else {
+          throw new Error('保存AI回复失败')
+        }
+      } else {
+        throw new Error(aiResponse.error || 'AI生成回复失败')
+      }
+      
+    } catch (err) {
+      error.value = err.message
+      console.error('流式发送消息失败:', err)
+      
+      // 清理流式消息
+      if (streamingMessage.value) {
+        const messageIndex = messages.value.findIndex(m => m.id === streamingMessage.value.id)
+        if (messageIndex >= 0) {
+          messages.value.splice(messageIndex, 1)
+        }
+      }
+      
+      return { success: false, error: err.message }
+    } finally {
+      streamingMessage.value = null
+      isStreaming.value = false
+      isTyping.value = false
     }
   }
 
@@ -551,6 +703,7 @@ export const useChatStore = defineStore('chat', () => {
     // 消息管理方法
     loadMessages,
     sendMessage,
+    sendMessageStream,
     retryMessage,
     rateMessage,
     clearMessages,

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Webhook测试 - 你的接口</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">测试你的n8n Webhook接口</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 左侧：测试控制 -->
+            <div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">测试消息</label>
+                        <textarea 
+                            id="testMessage" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-20"
+                            placeholder="输入测试消息..."
+                        >你好，这是一个测试消息，请回复我</textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">接口地址</label>
+                        <input 
+                            id="webhookUrl" 
+                            type="text" 
+                            value="https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca20842" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                    </div>
+                    
+                    <div class="flex space-x-2">
+                        <button 
+                            id="testBtn"
+                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            onclick="testWebhook()"
+                        >
+                            测试接口调用
+                        </button>
+                        
+                        <button 
+                            id="streamBtn"
+                            class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            onclick="testStreamWebhook()"
+                        >
+                            测试流式调用
+                        </button>
+                    </div>
+                    
+                    <button 
+                        onclick="clearLogs()"
+                        class="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                        清空日志
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 右侧：流式输出显示 -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 mb-3">流式输出显示</h3>
+                <div id="streamOutput" class="min-h-32 p-4 bg-gray-50 rounded-lg border whitespace-pre-wrap text-sm">
+                    等待测试...
+                </div>
+                
+                <div class="mt-4">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">连接状态</h3>
+                    <div id="connectionStatus" class="px-3 py-2 bg-gray-100 rounded text-sm">
+                        未连接
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 调试日志 -->
+        <div class="mt-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-3">调试日志</h3>
+            <div id="logs" class="p-4 bg-gray-900 text-green-400 rounded-lg text-xs font-mono max-h-96 overflow-y-auto min-h-32">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addLog(message) {
+            const logs = document.getElementById('logs')
+            const time = new Date().toLocaleTimeString()
+            logs.innerHTML += `<div>[${time}] ${message}</div>`
+            logs.scrollTop = logs.scrollHeight
+        }
+        
+        function updateStatus(message, color = 'gray') {
+            const status = document.getElementById('connectionStatus')
+            status.textContent = message
+            status.className = `px-3 py-2 bg-${color}-100 text-${color}-800 rounded text-sm`
+        }
+        
+        function updateStreamOutput(content) {
+            const output = document.getElementById('streamOutput')
+            output.textContent = content
+            output.scrollTop = output.scrollHeight
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = ''
+            document.getElementById('streamOutput').textContent = '等待测试...'
+            updateStatus('未连接')
+        }
+        
+        // 测试普通接口调用
+        async function testWebhook() {
+            const btn = document.getElementById('testBtn')
+            const message = document.getElementById('testMessage').value
+            const webhookUrl = document.getElementById('webhookUrl').value
+            
+            btn.disabled = true
+            btn.textContent = '测试中...'
+            updateStatus('连接中...', 'blue')
+            addLog('开始测试普通webhook调用...')
+            
+            try {
+                const requestBody = {
+                    prompt: message,
+                    message: message,
+                    config: {
+                        model_provider: 'n8n',
+                        model_name: 'gpt-3.5-turbo',
+                        temperature: 0.7,
+                        max_tokens: 1000,
+                        stream: false
+                    },
+                    context: {},
+                    user_id: 'test-user-' + Date.now(),
+                    session_id: 'test-session-' + Date.now(),
+                    timestamp: new Date().toISOString()
+                }
+                
+                addLog('发送请求体: ' + JSON.stringify(requestBody, null, 2))
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                })
+                
+                addLog(`响应状态: ${response.status} ${response.statusText}`)
+                addLog('响应头: ' + JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2))
+                
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    addLog(`错误响应内容: ${errorText}`)
+                    updateStatus(`错误: ${response.status}`, 'red')
+                    updateStreamOutput(`错误: ${response.status} ${response.statusText}\n${errorText}`)
+                    return
+                }
+                
+                const result = await response.json()
+                addLog('响应数据: ' + JSON.stringify(result, null, 2))
+                
+                const content = result.response || result.content || result.message || JSON.stringify(result)
+                updateStreamOutput(content)
+                updateStatus('连接成功', 'green')
+                addLog('普通调用测试完成')
+                
+            } catch (error) {
+                addLog('测试失败: ' + error.message)
+                updateStatus('连接失败', 'red')
+                updateStreamOutput(`连接失败: ${error.message}`)
+            } finally {
+                btn.disabled = false
+                btn.textContent = '测试接口调用'
+            }
+        }
+        
+        // 测试流式接口调用
+        async function testStreamWebhook() {
+            const btn = document.getElementById('streamBtn')
+            const message = document.getElementById('testMessage').value
+            const webhookUrl = document.getElementById('webhookUrl').value
+            
+            btn.disabled = true
+            btn.textContent = '流式测试中...'
+            updateStatus('建立流式连接...', 'blue')
+            addLog('开始测试流式webhook调用...')
+            updateStreamOutput('')
+            
+            try {
+                const requestBody = {
+                    prompt: message,
+                    message: message,
+                    config: {
+                        model_provider: 'n8n',
+                        model_name: 'gpt-3.5-turbo',
+                        temperature: 0.7,
+                        max_tokens: 1000,
+                        stream: true
+                    },
+                    context: {},
+                    user_id: 'test-user-' + Date.now(),
+                    session_id: 'test-session-' + Date.now(),
+                    timestamp: new Date().toISOString()
+                }
+                
+                addLog('发送流式请求体: ' + JSON.stringify(requestBody, null, 2))
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                })
+                
+                addLog(`流式响应状态: ${response.status} ${response.statusText}`)
+                const contentType = response.headers.get('content-type')
+                addLog(`Content-Type: ${contentType}`)
+                
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    addLog(`流式错误响应: ${errorText}`)
+                    updateStatus(`流式错误: ${response.status}`, 'red')
+                    updateStreamOutput(`流式错误: ${response.status} ${response.statusText}\n${errorText}`)
+                    return
+                }
+                
+                updateStatus('流式连接成功', 'green')
+                addLog('开始处理流式数据...')
+                
+                if (response.body) {
+                    const reader = response.body.getReader()
+                    const decoder = new TextDecoder()
+                    let buffer = ''
+                    let fullContent = ''
+                    
+                    try {
+                        while (true) {
+                            const { value, done } = await reader.read()
+                            if (done) {
+                                addLog('流式读取完成')
+                                break
+                            }
+                            
+                            const chunk = decoder.decode(value, { stream: true })
+                            buffer += chunk
+                            addLog(`收到数据块 (${chunk.length}字符): ${chunk.substring(0, 100)}...`)
+                            
+                            // 尝试不同的解析方式
+                            if (contentType?.includes('application/json')) {
+                                // JSON格式
+                                const lines = buffer.split('\n')
+                                buffer = lines.pop() || ''
+                                
+                                for (const line of lines) {
+                                    if (line.trim()) {
+                                        try {
+                                            const data = JSON.parse(line)
+                                            const newContent = data.content || data.response || data.message
+                                            if (newContent) {
+                                                // 检查是否是增量更新还是完整内容
+                                                if (newContent.length > fullContent.length && newContent.startsWith(fullContent)) {
+                                                    // 这是完整内容更新
+                                                    fullContent = newContent
+                                                    addLog(`完整内容更新: ${newContent.length} 字符`)
+                                                } else {
+                                                    // 这是增量内容
+                                                    fullContent += newContent
+                                                    addLog(`增量内容累加: +${newContent.length} 字符，总计: ${fullContent.length}`)
+                                                }
+                                                updateStreamOutput(fullContent)
+                                            }
+                                        } catch (e) {
+                                            fullContent += line + '\n'
+                                            updateStreamOutput(fullContent)
+                                            addLog(`文本内容: ${line.substring(0, 50)}...`)
+                                        }
+                                    }
+                                }
+                            } else {
+                                // 纯文本或其他格式
+                                fullContent += chunk
+                                updateStreamOutput(fullContent)
+                                addLog(`文本累加: +${chunk.length} 字符，总计: ${fullContent.length}`)
+                            }
+                        }
+                        
+                        if (!fullContent && buffer) {
+                            try {
+                                const finalData = JSON.parse(buffer)
+                                fullContent = finalData.content || finalData.response || finalData.message || buffer
+                                updateStreamOutput(fullContent)
+                                addLog(`最终解析: ${fullContent.substring(0, 50)}...`)
+                            } catch (e) {
+                                fullContent = buffer
+                                updateStreamOutput(fullContent)
+                                addLog(`最终文本: ${buffer.substring(0, 50)}...`)
+                            }
+                        }
+                        
+                        addLog('流式测试完成')
+                        updateStatus('流式完成', 'green')
+                        
+                    } catch (readerError) {
+                        addLog('流式读取错误: ' + readerError.message)
+                        updateStatus('读取错误', 'red')
+                    }
+                } else {
+                    addLog('无响应体，尝试JSON解析')
+                    const result = await response.json()
+                    const content = result.response || result.content || result.message || JSON.stringify(result)
+                    updateStreamOutput(content)
+                    addLog('JSON内容: ' + JSON.stringify(result, null, 2))
+                }
+                
+            } catch (error) {
+                addLog('流式测试失败: ' + error.message)
+                updateStatus('流式失败', 'red')
+                updateStreamOutput(`流式连接失败: ${error.message}`)
+            } finally {
+                btn.disabled = false
+                btn.textContent = '测试流式调用'
+            }
+        }
+        
+        // 页面加载完成
+        window.onload = function() {
+            addLog('页面加载完成，准备测试你的n8n webhook接口')
+            updateStatus('准备就绪')
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流式聊天测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div id="app" class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-6">流式聊天测试</h1>
+            
+            <!-- 消息列表 -->
+            <div class="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                <div 
+                    v-for="message in messages" 
+                    :key="message.id"
+                    class="flex"
+                    :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
+                >
+                    <div 
+                        class="max-w-xs px-4 py-2 rounded-lg"
+                        :class="message.role === 'user' 
+                            ? 'bg-blue-600 text-white' 
+                            : 'bg-white border border-gray-200'"
+                    >
+                        <div v-if="message.role === 'user'">
+                            {{ message.content }}
+                        </div>
+                        <div v-else>
+                            <div v-html="formatContent(message.content)"></div>
+                            <!-- 流式光标 -->
+                            <span 
+                                v-if="message.streaming" 
+                                class="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse"
+                            ></span>
+                        </div>
+                        <!-- 流式状态指示器 -->
+                        <div v-if="message.streaming" class="text-xs text-blue-600 mt-1">
+                            正在生成...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 输入区域 -->
+            <div class="flex space-x-4">
+                <input 
+                    v-model="inputMessage"
+                    @keyup.enter="sendMessage"
+                    type="text" 
+                    placeholder="输入消息..." 
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    :disabled="loading"
+                />
+                <button 
+                    @click="sendMessage"
+                    :disabled="loading || !inputMessage.trim()"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                    {{ loading ? '发送中...' : '发送' }}
+                </button>
+            </div>
+            
+            <!-- 配置区域 -->
+            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h3 class="font-medium text-gray-900 mb-3">测试配置</h3>
+                <div class="space-y-2">
+                    <div>
+                        <label class="block text-sm text-gray-700">Webhook URL:</label>
+                        <input 
+                            v-model="webhookUrl" 
+                            type="url" 
+                            class="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <label class="flex items-center">
+                            <input v-model="useStream" type="checkbox" class="mr-2" />
+                            <span class="text-sm">启用流式输出</span>
+                        </label>
+                        <button 
+                            @click="testConnection" 
+                            :disabled="testingConnection"
+                            class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        >
+                            {{ testingConnection ? '测试中...' : '测试连接' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 调试信息 -->
+            <div class="mt-4 p-3 bg-gray-900 text-green-400 rounded-lg text-xs font-mono max-h-32 overflow-y-auto">
+                <div v-for="log in debugLogs" :key="log.id">
+                    [{{ log.time }}] {{ log.message }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, nextTick } = Vue;
+        
+        createApp({
+            setup() {
+                const messages = ref([])
+                const inputMessage = ref('')
+                const loading = ref(false)
+                const testingConnection = ref(false)
+                const webhookUrl = ref('https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca')
+                const useStream = ref(true)
+                const debugLogs = ref([])
+                
+                let messageIdCounter = 1
+                
+                const addLog = (message) => {
+                    debugLogs.value.push({
+                        id: Date.now(),
+                        time: new Date().toLocaleTimeString(),
+                        message
+                    })
+                    // 保持最新10条日志
+                    if (debugLogs.value.length > 10) {
+                        debugLogs.value.shift()
+                    }
+                }
+                
+                const formatContent = (content) => {
+                    return content.replace(/\n/g, '<br>')
+                }
+                
+                const testConnection = async () => {
+                    testingConnection.value = true
+                    addLog('开始测试连接...')
+                    
+                    try {
+                        const response = await fetch(webhookUrl.value, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                test: true,
+                                message: "连接测试",
+                                timestamp: new Date().toISOString()
+                            })
+                        })
+                        
+                        if (response.ok) {
+                            const result = await response.json()
+                            addLog(`连接成功: ${response.status}`)
+                            addLog(`响应: ${JSON.stringify(result)}`)
+                        } else {
+                            addLog(`连接失败: ${response.status} ${response.statusText}`)
+                        }
+                    } catch (error) {
+                        addLog(`连接错误: ${error.message}`)
+                    } finally {
+                        testingConnection.value = false
+                    }
+                }
+                
+                const sendMessage = async () => {
+                    if (!inputMessage.value.trim() || loading.value) return
+                    
+                    const userMessage = {
+                        id: messageIdCounter++,
+                        role: 'user',
+                        content: inputMessage.value.trim(),
+                        streaming: false
+                    }
+                    
+                    messages.value.push(userMessage)
+                    const messageContent = inputMessage.value.trim()
+                    inputMessage.value = ''
+                    loading.value = true
+                    
+                    addLog(`发送消息: ${messageContent}`)
+                    
+                    // 创建AI消息占位符
+                    const aiMessage = {
+                        id: messageIdCounter++,
+                        role: 'assistant',
+                        content: '',
+                        streaming: true
+                    }
+                    messages.value.push(aiMessage)
+                    
+                    try {
+                        const requestData = {
+                            prompt: messageContent,
+                            config: {
+                                model_name: "gpt-3.5-turbo",
+                                temperature: 0.7,
+                                max_tokens: 1000,
+                                stream: useStream.value
+                            },
+                            context: {},
+                            user_id: "test-user",
+                            session_id: "test-session",
+                            timestamp: new Date().toISOString()
+                        }
+                        
+                        addLog(`请求数据: ${JSON.stringify(requestData)}`)
+                        
+                        if (useStream.value) {
+                            await handleStreamResponse(webhookUrl.value, requestData, aiMessage)
+                        } else {
+                            await handleRegularResponse(webhookUrl.value, requestData, aiMessage)
+                        }
+                        
+                    } catch (error) {
+                        addLog(`发送失败: ${error.message}`)
+                        aiMessage.content = `错误: ${error.message}`
+                        aiMessage.streaming = false
+                    } finally {
+                        loading.value = false
+                    }
+                }
+                
+                const handleStreamResponse = async (url, data, aiMessage) => {
+                    addLog('开始流式响应处理...')
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                    }
+                    
+                    const reader = response.body.getReader()
+                    const decoder = new TextDecoder()
+                    let buffer = ''
+                    
+                    try {
+                        while (true) {
+                            const { value, done } = await reader.read()
+                            if (done) break
+                            
+                            buffer += decoder.decode(value, { stream: true })
+                            const lines = buffer.split('\n')
+                            buffer = lines.pop() || ''
+                            
+                            for (const line of lines) {
+                                if (line.trim().startsWith('data: ')) {
+                                    try {
+                                        const jsonStr = line.trim().slice(6)
+                                        if (jsonStr === '[DONE]' || jsonStr.trim() === '') continue
+                                        
+                                        const sseData = JSON.parse(jsonStr)
+                                        addLog(`SSE数据: ${JSON.stringify(sseData)}`)
+                                        
+                                        if (sseData.type === 'content') {
+                                            aiMessage.content = sseData.data || ''
+                                            // 强制Vue更新
+                                            await nextTick()
+                                        } else if (sseData.type === 'done') {
+                                            aiMessage.streaming = false
+                                            addLog('流式响应完成')
+                                            return
+                                        } else if (sseData.type === 'error') {
+                                            throw new Error(sseData.data?.error || '流式处理出错')
+                                        }
+                                    } catch (parseError) {
+                                        addLog(`解析错误: ${parseError.message}`)
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        reader.releaseLock()
+                        aiMessage.streaming = false
+                    }
+                }
+                
+                const handleRegularResponse = async (url, data, aiMessage) => {
+                    addLog('开始普通响应处理...')
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    })
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+                    }
+                    
+                    const result = await response.json()
+                    addLog(`响应: ${JSON.stringify(result)}`)
+                    
+                    aiMessage.content = result.response || result.content || result.message || '无响应内容'
+                    aiMessage.streaming = false
+                }
+                
+                // 初始化日志
+                addLog('流式聊天测试页面已加载')
+                
+                return {
+                    messages,
+                    inputMessage,
+                    loading,
+                    testingConnection,
+                    webhookUrl,
+                    useStream,
+                    debugLogs,
+                    sendMessage,
+                    testConnection,
+                    formatContent
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>

@@ -238,14 +238,20 @@
 
           <!-- 消息列表 -->
           <div v-else class="p-6 space-y-6">
-            <ChatMessage
-              v-for="message in chatStore.messages"
-              :key="message.id"
-              :message="message"
-              :is-streaming="chatStore.isTyping && message === chatStore.messages[chatStore.messages.length - 1]"
-              @retry="retryMessage"
-              @copy="copyMessage"
-            />
+            <div v-for="(message, index) in chatStore.messages" :key="message.id" class="message-wrapper">
+              <!-- 调试信息 -->
+              <div v-if="isDev" class="text-xs text-gray-400 mb-1">
+                [调试] ID: {{ message.id }} | 内容长度: {{ message.content?.length || 0 }} | 流式: {{ isStreamingMessage(message) }}
+              </div>
+              <ChatMessage
+                :message="message"
+                :is-streaming="isStreamingMessage(message)"
+                @retry="retryMessage"
+                @copy="copyMessage"
+                @rate="rateMessage"
+                @edit="editMessage"
+              />
+            </div>
 
             <!-- AI正在输入指示器 -->
             <div v-if="chatStore.isTyping" class="flex justify-start">
@@ -295,6 +301,14 @@
                         </span>
                       </div>
                       
+                      <!-- 当前状态信息 -->
+                      <div v-if="aiCallStatus.message" class="flex items-center space-x-2">
+                        <div class="w-4 h-4 flex items-center justify-center">
+                          <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                        </div>
+                        <span class="text-xs text-blue-600">{{ aiCallStatus.message }}</span>
+                      </div>
+                      
                       <!-- 错误状态 -->
                       <div v-if="aiCallStatus.error" class="flex items-center space-x-2">
                         <div class="w-4 h-4 flex items-center justify-center">
@@ -330,6 +344,9 @@
         />
       </div>
     </div>
+    
+    <!-- 调试组件 -->
+    <StreamDebugger v-if="isDev" />
   </div>
 </template>
 
@@ -340,9 +357,13 @@ import { realtimeChatService } from '../../services/realtime-chat.service.js'
 import { useNotification } from '../../composables/useNotification.js'
 import ChatInput from '../../components/ui/ChatInput.vue'
 import ChatMessage from '../../components/ui/ChatMessage.vue'
+import StreamDebugger from '../../components/debug/StreamDebugger.vue'
 
 const { showNotification } = useNotification()
 const chatStore = useChatStore()
+
+// 开发模式检测
+const isDev = import.meta.env.DEV
 
 // 响应式数据
 const messagesContainer = ref(null)
@@ -425,6 +446,19 @@ watch(() => chatStore.currentSession, async (newSession, oldSession) => {
 })
 
 // 方法
+const isStreamingMessage = (message) => {
+  const result = (message.metadata?.streaming === true) ||
+         (message.id && message.id.startsWith('temp_'))
+         
+  console.log('ChatView流式检查:', {
+    messageId: message.id,
+    contentLength: message.content?.length,
+    isStreaming: result
+  })
+  
+  return result
+}
+
 const initializeChat = async () => {
   try {
     // 初始化聊天store
@@ -558,23 +592,31 @@ const sendMessage = async (content) => {
   }
   
   try {
-    // 步骤1: 准备AI配置
-    aiCallStatus.value.step = 1
-    await new Promise(resolve => setTimeout(resolve, 500)) // 模拟准备时间
-    
     // 发送打字状态
     if (chatStore.currentSession) {
       await realtimeChatService.sendTypingIndicator(chatStore.currentSession.id, false)
     }
     
-    // 步骤2: 发送请求到n8n
-    aiCallStatus.value.step = 2
-    
-    const result = await chatStore.sendMessage(content.trim())
-    
-    // 步骤3: 处理响应
-    aiCallStatus.value.step = 3
-    await new Promise(resolve => setTimeout(resolve, 300)) // 模拟处理时间
+    const result = await chatStore.sendMessageStream(content.trim(), {
+      onChunk: (chunk) => {
+        console.log('ChatView收到流式内容:', chunk) // 添加调试日志
+        // 确保UI实时更新流式内容
+        // 内容已经通过store的streamingMessage更新
+        nextTick(() => {
+          scrollToBottom()
+        })
+      },
+      onStatus: (status) => {
+        console.log('ChatView收到状态更新:', status) // 添加调试日志
+        // 更新AI调用状态
+        aiCallStatus.value = {
+          show: true,
+          step: status.step,
+          error: null,
+          message: status.message
+        }
+      }
+    })
     
     if (result.success) {
       // 完成后隐藏状态

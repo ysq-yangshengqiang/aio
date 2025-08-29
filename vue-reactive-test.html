@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue响应式测试</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div id="app" class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-6">Vue响应式更新测试</h1>
+            
+            <!-- 消息列表 -->
+            <div class="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                <div 
+                    v-for="(message, index) in messages" 
+                    :key="message.id"
+                    class="p-4 rounded-lg border"
+                    :class="message.role === 'user' ? 'bg-blue-100' : 'bg-gray-100'"
+                >
+                    <div class="text-sm text-gray-600 mb-1">
+                        [{{ index }}] ID: {{ message.id }} | 长度: {{ message.content?.length || 0 }}
+                        {{ message.streaming ? ' | 流式中...' : '' }}
+                    </div>
+                    <div class="whitespace-pre-wrap">{{ message.content }}</div>
+                </div>
+            </div>
+            
+            <!-- 控制面板 -->
+            <div class="space-y-4">
+                <button 
+                    @click="addUserMessage"
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                    添加用户消息
+                </button>
+                
+                <button 
+                    @click="startStreamingResponse"
+                    :disabled="isStreaming"
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
+                    {{ isStreaming ? '流式进行中...' : '开始流式回复' }}
+                </button>
+                
+                <button 
+                    @click="clearMessages"
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                    清空消息
+                </button>
+            </div>
+            
+            <!-- 调试信息 -->
+            <div class="mt-4 p-3 bg-gray-900 text-green-400 rounded-lg text-xs font-mono max-h-32 overflow-y-auto">
+                <div>消息总数: {{ messages.length }}</div>
+                <div>流式状态: {{ isStreaming }}</div>
+                <div>流式消息ID: {{ streamingMessageId || '无' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, nextTick } = Vue;
+        
+        createApp({
+            setup() {
+                const messages = ref([])
+                const isStreaming = ref(false)
+                const streamingMessageId = ref(null)
+                let messageIdCounter = 1
+                
+                const addUserMessage = () => {
+                    const userMessage = {
+                        id: messageIdCounter++,
+                        role: 'user',
+                        content: `用户消息 ${Date.now()}`,
+                        streaming: false
+                    }
+                    messages.value.push(userMessage)
+                }
+                
+                const startStreamingResponse = async () => {
+                    if (isStreaming.value) return
+                    
+                    isStreaming.value = true
+                    
+                    // 创建流式消息占位符
+                    const aiMessage = {
+                        id: `temp_${messageIdCounter++}`,
+                        role: 'assistant',
+                        content: '',
+                        streaming: true
+                    }
+                    
+                    messages.value.push(aiMessage)
+                    streamingMessageId.value = aiMessage.id
+                    
+                    // 模拟流式内容
+                    const fullContent = "这是一个模拟的流式回复内容。我会逐字符地显示出来，模拟真实的AI流式响应效果。通过这个测试，我们可以确认Vue的响应式系统是否正常工作。"
+                    
+                    for (let i = 0; i < fullContent.length; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 50))
+                        
+                        const partialContent = fullContent.substring(0, i + 1)
+                        
+                        // 方法1: 直接更新数组中的对象属性
+                        const messageIndex = messages.value.findIndex(m => m.id === aiMessage.id)
+                        if (messageIndex >= 0) {
+                            // 创建新对象触发响应式更新
+                            messages.value[messageIndex] = {
+                                ...messages.value[messageIndex],
+                                content: partialContent,
+                                lastUpdate: Date.now()
+                            }
+                        }
+                        
+                        // 等待Vue更新DOM
+                        await nextTick()
+                    }
+                    
+                    // 完成流式输出
+                    const messageIndex = messages.value.findIndex(m => m.id === aiMessage.id)
+                    if (messageIndex >= 0) {
+                        messages.value[messageIndex] = {
+                            ...messages.value[messageIndex],
+                            streaming: false
+                        }
+                    }
+                    
+                    isStreaming.value = false
+                    streamingMessageId.value = null
+                }
+                
+                const clearMessages = () => {
+                    messages.value = []
+                    isStreaming.value = false
+                    streamingMessageId.value = null
+                }
+                
+                return {
+                    messages,
+                    isStreaming,
+                    streamingMessageId,
+                    addUserMessage,
+                    startStreamingResponse,
+                    clearMessages
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>

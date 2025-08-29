@@ -84,6 +84,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/chat/quick-setup',
+    name: 'quick-webhook-setup',
+    component: () => import('../views/chat/QuickWebhookSetup.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/recommendations',
     name: 'recommendations',
     component: () => import('../views/recommendations/RecommendationsView.vue'),

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N8N Webhook 流式测试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">N8N Webhook 流式响应测试</h1>
+        
+        <!-- 配置区域 -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h2 class="text-lg font-semibold mb-4">配置</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Webhook URL</label>
+                    <input 
+                        type="url" 
+                        id="webhookUrl" 
+                        value="https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">流式响应</label>
+                    <select id="streamMode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="true">启用流式</option>
+                        <option value="false">普通响应</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 测试区域 -->
+        <div class="mb-6">
+            <h2 class="text-lg font-semibold mb-4">测试消息</h2>
+            <div class="flex space-x-4">
+                <textarea 
+                    id="testMessage" 
+                    rows="3" 
+                    placeholder="输入测试消息..."
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >请介绍一下人工智能的发展历程，包括主要的里程碑事件。</textarea>
+                <button 
+                    onclick="sendTestMessage()" 
+                    id="sendBtn"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    发送测试
+                </button>
+            </div>
+        </div>
+
+        <!-- 响应显示区域 -->
+        <div class="space-y-4">
+            <h2 class="text-lg font-semibold">响应结果</h2>
+            
+            <!-- 状态指示器 -->
+            <div id="statusIndicator" class="hidden p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="statusText" class="text-blue-800 text-sm">正在发送请求...</span>
+                </div>
+            </div>
+            
+            <!-- 流式内容显示区域 -->
+            <div class="bg-white border border-gray-200 rounded-lg p-4 min-h-[200px]">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <div id="streamContent" class="prose prose-sm max-w-none text-gray-800 min-h-[100px]">
+                            <p class="text-gray-500 italic">点击"发送测试"开始测试流式响应...</p>
+                        </div>
+                        <div id="streamingCursor" class="hidden inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse"></div>
+                    </div>
+                </div>
+                
+                <!-- 响应元数据 -->
+                <div id="responseMetadata" class="hidden mt-4 pt-4 border-t border-gray-200">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                            <span class="font-medium text-gray-700">响应时间:</span>
+                            <span id="responseTime" class="text-gray-600 ml-1">-</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700">Token使用:</span>
+                            <span id="tokensUsed" class="text-gray-600 ml-1">-</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700">模型:</span>
+                            <span id="modelUsed" class="text-gray-600 ml-1">-</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700">状态:</span>
+                            <span id="responseStatus" class="text-green-600 ml-1">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日志区域 -->
+        <div class="mt-6">
+            <h2 class="text-lg font-semibold mb-4">请求日志</h2>
+            <div id="requestLogs" class="bg-gray-900 text-green-400 rounded-lg p-4 font-mono text-sm max-h-60 overflow-y-auto">
+                <p>等待请求...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let startTime;
+        let isStreaming = false;
+
+        function log(message) {
+            const logsContainer = document.getElementById('requestLogs');
+            const timestamp = new Date().toLocaleTimeString();
+            logsContainer.innerHTML += `<br>[${timestamp}] ${message}`;
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function updateStatus(text, show = true) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            if (show) {
+                statusText.textContent = text;
+                indicator.classList.remove('hidden');
+            } else {
+                indicator.classList.add('hidden');
+            }
+        }
+
+        function clearContent() {
+            document.getElementById('streamContent').innerHTML = '';
+            document.getElementById('responseMetadata').classList.add('hidden');
+            document.getElementById('streamingCursor').classList.add('hidden');
+        }
+
+        function showStreamingCursor() {
+            document.getElementById('streamingCursor').classList.remove('hidden');
+        }
+
+        function hideStreamingCursor() {
+            document.getElementById('streamingCursor').classList.add('hidden');
+        }
+
+        function updateStreamContent(content) {
+            const contentEl = document.getElementById('streamContent');
+            // 将换行符转换为HTML
+            const htmlContent = content.replace(/\n/g, '<br>');
+            contentEl.innerHTML = htmlContent;
+            showStreamingCursor();
+        }
+
+        function showMetadata(metadata) {
+            document.getElementById('responseTime').textContent = metadata.response_time || '-';
+            document.getElementById('tokensUsed').textContent = metadata.tokens_used || '-';
+            document.getElementById('modelUsed').textContent = metadata.model || '-';
+            document.getElementById('responseStatus').textContent = metadata.success ? '成功' : '失败';
+            document.getElementById('responseMetadata').classList.remove('hidden');
+        }
+
+        async function sendTestMessage() {
+            const webhookUrl = document.getElementById('webhookUrl').value;
+            const message = document.getElementById('testMessage').value;
+            const streamMode = document.getElementById('streamMode').value === 'true';
+            const sendBtn = document.getElementById('sendBtn');
+
+            if (!webhookUrl || !message) {
+                alert('请填写Webhook URL和测试消息');
+                return;
+            }
+
+            // 重置界面
+            clearContent();
+            sendBtn.disabled = true;
+            sendBtn.textContent = '发送中...';
+            isStreaming = streamMode;
+            startTime = Date.now();
+
+            // 清空日志
+            document.getElementById('requestLogs').innerHTML = '';
+
+            try {
+                updateStatus('正在连接到n8n webhook...');
+                log(`开始请求: ${webhookUrl}`);
+                log(`流式模式: ${streamMode ? '是' : '否'}`);
+                log(`消息内容: ${message}`);
+
+                const requestData = {
+                    prompt: message,
+                    config: {
+                        model_name: "gpt-3.5-turbo",
+                        temperature: 0.7,
+                        max_tokens: 1000,
+                        stream: streamMode
+                    },
+                    context: {},
+                    user_id: "test-user",
+                    session_id: "test-session-" + Date.now(),
+                    timestamp: new Date().toISOString()
+                };
+
+                log('发送请求数据: ' + JSON.stringify(requestData, null, 2));
+
+                if (streamMode) {
+                    await handleStreamingResponse(webhookUrl, requestData);
+                } else {
+                    await handleRegularResponse(webhookUrl, requestData);
+                }
+
+            } catch (error) {
+                log(`错误: ${error.message}`);
+                updateStatus('请求失败', false);
+                document.getElementById('streamContent').innerHTML = 
+                    `<p class="text-red-600">请求失败: ${error.message}</p>`;
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = '发送测试';
+                hideStreamingCursor();
+            }
+        }
+
+        async function handleStreamingResponse(url, data) {
+            updateStatus('等待流式响应...');
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            log(`响应状态: ${response.status} ${response.statusText}`);
+            updateStatus('正在接收流式数据...');
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedContent = '';
+            let buffer = '';
+
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.trim().startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.trim().slice(6);
+                                if (jsonStr === '[DONE]' || jsonStr.trim() === '') {
+                                    continue;
+                                }
+
+                                const data = JSON.parse(jsonStr);
+                                log(`SSE数据: ${JSON.stringify(data)}`);
+
+                                if (data.type === 'connected') {
+                                    updateStatus('已连接，等待内容...');
+                                } else if (data.type === 'content') {
+                                    accumulatedContent = data.data || '';
+                                    updateStreamContent(accumulatedContent);
+                                } else if (data.type === 'done') {
+                                    hideStreamingCursor();
+                                    updateStatus('', false);
+                                    const endTime = Date.now();
+                                    log(`流式响应完成，总耗时: ${endTime - startTime}ms`);
+                                    
+                                    showMetadata({
+                                        response_time: `${endTime - startTime}ms`,
+                                        tokens_used: data.data?.tokens_used || 0,
+                                        model: data.data?.model || 'unknown',
+                                        success: true
+                                    });
+                                    break;
+                                } else if (data.type === 'error') {
+                                    throw new Error(data.data?.error || '流式处理出错');
+                                }
+                            } catch (parseError) {
+                                log(`解析SSE数据出错: ${parseError.message}, 原始数据: ${line}`);
+                            }
+                        }
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+            }
+        }
+
+        async function handleRegularResponse(url, data) {
+            updateStatus('等待响应...');
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            log(`响应数据: ${JSON.stringify(result, null, 2)}`);
+
+            updateStatus('', false);
+            const endTime = Date.now();
+            
+            // 显示内容
+            const content = result.response || result.content || result.message || '无响应内容';
+            updateStreamContent(content);
+            
+            showMetadata({
+                response_time: `${endTime - startTime}ms`,
+                tokens_used: result.tokens_used || 0,
+                model: result.model || 'unknown',
+                success: result.success !== false
+            });
+
+            log(`普通响应完成，总耗时: ${endTime - startTime}ms`);
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            log('N8N Webhook 测试页面已加载');
+            log('请配置正确的Webhook URL后开始测试');
+        });
+    </script>
+</body>
+</html>

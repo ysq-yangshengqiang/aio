@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Webhook快速测试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-900 mb-6">n8n Webhook快速测试</h1>
+        
+        <!-- 测试区域 -->
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">测试消息</label>
+                <input 
+                    id="testMessage" 
+                    type="text" 
+                    value="你好，这是一个测试消息" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+            </div>
+            
+            <button 
+                id="testBtn"
+                class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                onclick="testWebhook()"
+            >
+                测试Webhook连接
+            </button>
+        </div>
+        
+        <!-- 结果区域 -->
+        <div id="results" class="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-700 mb-2">测试结果:</h3>
+            <div id="resultContent" class="text-sm text-gray-600">
+                等待测试...
+            </div>
+        </div>
+        
+        <!-- 日志区域 -->
+        <div class="mt-4 p-3 bg-gray-900 text-green-400 rounded-lg text-xs font-mono max-h-32 overflow-y-auto">
+            <div id="logs"></div>
+        </div>
+    </div>
+
+    <script>
+        function addLog(message) {
+            const logs = document.getElementById('logs')
+            const time = new Date().toLocaleTimeString()
+            logs.innerHTML += `<div>[${time}] ${message}</div>`
+            logs.scrollTop = logs.scrollHeight
+        }
+        
+        async function testWebhook() {
+            const btn = document.getElementById('testBtn')
+            const message = document.getElementById('testMessage').value
+            const resultContent = document.getElementById('resultContent')
+            
+            btn.disabled = true
+            btn.textContent = '测试中...'
+            addLog('开始测试webhook连接...')
+            
+            try {
+                const webhookUrl = 'https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca'
+                const requestBody = {
+                    prompt: message,
+                    config: {
+                        model_provider: 'n8n',
+                        model_name: 'gpt-3.5-turbo',
+                        temperature: 0.7,
+                        max_tokens: 1000,
+                        stream: false
+                    },
+                    context: {},
+                    user_id: 'test-user',
+                    session_id: 'test-session',
+                    timestamp: new Date().toISOString()
+                }
+                
+                addLog('发送请求: ' + JSON.stringify(requestBody))
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                })
+                
+                addLog(`响应状态: ${response.status} ${response.statusText}`)
+                
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    addLog(`错误响应: ${errorText}`)
+                    resultContent.innerHTML = `<span class="text-red-600">错误: ${response.status} ${response.statusText}</span>`
+                    return
+                }
+                
+                const result = await response.json()
+                addLog('响应数据: ' + JSON.stringify(result))
+                
+                // 提取响应内容
+                const content = result.response || result.content || result.message || result.data?.content || '无响应内容'
+                
+                resultContent.innerHTML = `
+                    <div class="text-green-600 font-medium mb-2">✅ 连接成功!</div>
+                    <div><strong>响应内容:</strong></div>
+                    <div class="bg-white p-3 rounded border mt-2">${content}</div>
+                `
+                
+                addLog('测试完成 - 成功')
+                
+            } catch (error) {
+                addLog('测试失败: ' + error.message)
+                resultContent.innerHTML = `<span class="text-red-600">连接失败: ${error.message}</span>`
+            } finally {
+                btn.disabled = false
+                btn.textContent = '测试Webhook连接'
+            }
+        }
+        
+        // 页面加载完成后自动测试一次
+        window.onload = function() {
+            addLog('页面加载完成，准备测试webhook')
+        }
+    </script>
+</body>
+</html>

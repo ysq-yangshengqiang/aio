@@ -154,25 +154,36 @@ serve(async (req) => {
             const decoder = new TextDecoder()
             let accumulatedContent = ''
             let finalResult = null
+            let buffer = ''
 
             try {
               while (true) {
                 const { value, done } = await reader.read()
                 if (done) break
 
-                const chunk = decoder.decode(value, { stream: true })
-                const lines = chunk.split('\n')
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+                
+                // 保留最后一行（可能不完整）
+                buffer = lines.pop() || ''
 
                 for (const line of lines) {
-                  if (line.startsWith('data: ')) {
+                  if (line.trim().startsWith('data: ')) {
                     try {
-                      const data = JSON.parse(line.slice(6))
+                      const jsonStr = line.trim().slice(6)
+                      if (jsonStr === '[DONE]' || jsonStr.trim() === '') {
+                        continue
+                      }
+                      
+                      const data = JSON.parse(jsonStr)
                       
                       if (data.type === 'content' || data.type === 'delta') {
                         // Stream content to client
-                        const content = data.content || data.delta || data.data
-                        accumulatedContent += content
-                        controller.enqueue(createSSEChunk('content', accumulatedContent))
+                        const content = data.content || data.delta || data.data || ''
+                        if (content) {
+                          accumulatedContent += content
+                          controller.enqueue(createSSEChunk('content', accumulatedContent))
+                        }
                       } else if (data.type === 'done' || data.done) {
                         finalResult = {
                           content: accumulatedContent,
@@ -188,7 +199,8 @@ serve(async (req) => {
                         return
                       }
                     } catch (parseError) {
-                      console.error('Error parsing n8n streaming data:', parseError)
+                      console.error('Error parsing n8n streaming data:', parseError, 'Line:', line)
+                      // 继续处理其他行，不要因为一行错误就停止
                     }
                   }
                 }

@@ -23,20 +23,25 @@
         <!-- AI消息 -->
         <div v-else class="text-gray-800">
           <!-- 流式输入效果 -->
-          <div v-if="isStreaming" class="relative">
+          <div v-if="isStreaming || isStreamingMessage" class="relative">
             <div 
-              v-html="renderedContent" 
-              class="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-800 prose-a:text-blue-600 prose-strong:text-gray-900 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm"
-            ></div>
-            <span class="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse"></span>
+              class="whitespace-pre-wrap"
+            >{{ renderedContent }}</div>
+            <span class="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse cursor-blink"></span>
+            
+            <!-- 流式状态指示器 -->
+            <div v-if="isStreamingMessage" class="mt-2 flex items-center text-xs text-blue-600">
+              <svg class="w-3 h-3 mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>AI正在生成回复...</span>
+            </div>
           </div>
           
           <!-- 完整消息 -->
           <div v-else>
-            <div 
-              v-html="renderedContent" 
-              class="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-800 prose-a:text-blue-600 prose-strong:text-gray-900 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-pre:bg-gray-900 prose-pre:text-gray-100"
-            ></div>
+            <div class="whitespace-pre-wrap">{{ renderedContent }}</div>
           </div>
         </div>
 
@@ -189,6 +194,22 @@ const emit = defineEmits(['copy', 'retry', 'rate', 'edit'])
 // 计算属性
 const isUser = computed(() => props.message.role === 'user')
 
+// 检查是否为流式消息 - 简化版
+const isStreamingMessage = computed(() => {
+  const result = props.isStreaming || 
+         (props.message.metadata?.streaming === true) ||
+         (props.message.id && props.message.id.startsWith('temp_'))
+         
+  console.log('ChatMessage流式检查:', {
+    messageId: props.message.id,
+    content: props.message.content?.substring(0, 50) + '...',
+    contentLength: props.message.content?.length,
+    isStreaming: result
+  })
+  
+  return result
+})
+
 const messageClasses = computed(() => {
   if (isUser.value) {
     return {
@@ -207,11 +228,10 @@ const renderedContent = computed(() => {
   if (isUser.value) {
     return props.message.content
   } else {
-    // 为AI消息启用Markdown渲染
-    return marked(props.message.content, {
-      breaks: true,
-      gfm: true
-    })
+    // 简化AI消息渲染，直接返回内容
+    const content = props.message.content || ''
+    console.log('ChatMessage渲染内容:', content.length, '字符')
+    return content
   }
 })
 
@@ -329,12 +349,60 @@ const editMessage = () => {
 }
 
 /* 流式输入光标动画 */
-@keyframes pulse {
+.cursor-blink {
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
   0%, 50% {
     opacity: 1;
   }
   51%, 100% {
     opacity: 0;
+  }
+}
+
+/* 流式内容动画 */
+.streaming-content {
+  animation: fadeInText 0.3s ease-in;
+}
+
+@keyframes fadeInText {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 流式内容平滑更新 */
+.streaming-content :deep(p:last-child) {
+  position: relative;
+}
+
+/* 流式文字出现效果 */
+.streaming-content :deep(*) {
+  animation: textReveal 0.1s ease-out;
+}
+
+@keyframes textReveal {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
 </style>

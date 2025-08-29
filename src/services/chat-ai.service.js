@@ -12,7 +12,7 @@ export class ChatAIService {
   }
 
   /**
-   * 生成AI回复
+   * 生成AI回复 - 直接调用n8n webhook
    * @param {string} prompt - 用户输入
    * @param {Object} config - AI配置
    * @param {Object} context - 上下文信息
@@ -27,197 +27,323 @@ export class ChatAIService {
 
       const startTime = Date.now()
       
-      // 调用Supabase Edge Function
-      const { data, error } = await supabase.functions.invoke('chat-ai-handler', {
-        body: {
-          sessionId: config.session_id,
-          message: prompt,
-          userId: config.user_id || user.id,
-          context,
-          aiConfig: {
-            model_provider: config.provider || this.defaultProvider,
-            model_name: config.model_name || 'gpt-3.5-turbo',
-            temperature: config.temperature || 0.7,
-            max_tokens: config.max_tokens || 1000,
-            ...config
-          }
-        }
+      // 使用你提供的n8n webhook URL
+      const webhookUrl = 'https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca20842'
+      
+      const requestBody = {
+        prompt: prompt,
+        config: {
+          model_provider: config.provider || this.defaultProvider,
+          model_name: config.model_name || 'gpt-3.5-turbo',
+          temperature: config.temperature || 0.7,
+          max_tokens: config.max_tokens || 1000,
+          stream: false
+        },
+        context: context,
+        user_id: config.user_id || user.id,
+        session_id: config.session_id,
+        timestamp: new Date().toISOString()
+      }
+
+      console.log('发送普通请求到n8n webhook:', { webhookUrl, requestBody })
+
+      // 调用n8n webhook
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
       })
 
-      if (error) {
-        throw new Error(error.message)
+      console.log('n8n webhook响应状态:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        console.error('n8n webhook错误响应:', errorText)
+        throw new Error(`n8n webhook调用失败: ${response.status} ${response.statusText}`)
       }
 
-      if (!data.success) {
-        throw new Error(data.error || '生成回复失败')
-      }
+      const result = await response.json()
+      console.log('n8n webhook响应结果:', result)
 
       const responseTime = Date.now() - startTime
+      
+      // 提取响应内容
+      const content = result.response || result.content || result.message || result.data?.content || '无响应内容'
 
       return {
         success: true,
         data: {
-          ...data.data,
+          content: content,
           response_time: responseTime,
-          provider: config.provider || this.defaultProvider
+          provider: 'n8n',
+          metadata: result.metadata || result.data || {}
         }
       }
     } catch (error) {
       console.error('AI服务生成回复失败:', error)
       
-      // 如果Edge Function不可用，提供fallback
-      if (error.message.includes('n8n workflow') || error.message.includes('No active n8n workflow')) {
+      // 提供fallback响应
+      return {
+        success: true,
+        data: {
+          content: '抱歉，AI服务暂时不可用。请确保您的n8n工作流正常运行，或稍后重试。',
+          tokens_used: 0,
+          provider: 'fallback',
+          metadata: {
+            fallback: true,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 流式生成回复 - 直接调用n8n webhook
+   */
+  async generateStreamResponse(prompt, config = {}, context = {}, onChunk, onStatus) {
+    try {
+      console.log('开始调用n8n webhook进行流式响应')
+      
+      if (onStatus) onStatus({ step: 1, message: '准备AI配置...' })
+      
+      // 使用你提供的n8n webhook URL
+      const webhookUrl = 'https://ysq123.app.n8n.cloud/webhook/66695751-ef1a-4f40-b901-b6fd7ca20842'
+      
+      const requestBody = {
+        prompt: prompt,
+        message: prompt, // 兼容不同的参数名
+        config: {
+          model_provider: config.provider || this.defaultProvider,
+          model_name: config.model_name || 'gpt-3.5-turbo',
+          temperature: config.temperature || 0.7,
+          max_tokens: config.max_tokens || 1000,
+          stream: true
+        },
+        context: context,
+        user_id: config.user_id || 'user-' + Date.now(),
+        session_id: config.session_id || 'session-' + Date.now(),
+        timestamp: new Date().toISOString()
+      }
+
+      console.log('发送请求到n8n webhook:', { webhookUrl, requestBody })
+
+      if (onStatus) onStatus({ step: 2, message: '正在调用n8n Webhook...' })
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('n8n webhook响应状态:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        console.error('n8n webhook错误响应:', errorText)
+        throw new Error(`n8n webhook调用失败: ${response.status} ${response.statusText}`)
+      }
+
+      if (onStatus) onStatus({ step: 3, message: '处理AI响应...' })
+
+      // 检查响应类型
+      const contentType = response.headers.get('content-type')
+      console.log('响应Content-Type:', contentType)
+
+      // 如果响应支持流式处理
+      if (response.body) {
+        console.log('开始处理流式响应...')
+        
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let fullContent = ''
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read()
+            if (done) {
+              console.log('流式读取完成')
+              break
+            }
+
+            const chunk = decoder.decode(value, { stream: true })
+            buffer += chunk
+            
+            console.log('收到数据块:', chunk)
+
+            // 处理不同的响应格式
+            if (contentType?.includes('application/json')) {
+              // JSON流式响应
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+
+              for (const line of lines) {
+                if (line.trim()) {
+                  try {
+                    const data = JSON.parse(line)
+                    console.log('解析JSON数据:', data)
+                    
+                    if (data.content || data.response || data.message) {
+                      const newContent = data.content || data.response || data.message
+                      
+                      // 检查是否是增量内容还是完整内容
+                      if (newContent.length > fullContent.length && newContent.startsWith(fullContent)) {
+                        // 这是增量更新（新内容包含旧内容）
+                        fullContent = newContent
+                        console.log('更新完整内容，总长度:', fullContent.length)
+                      } else {
+                        // 这是新的增量块，需要累加
+                        fullContent += newContent
+                        console.log('累加新内容，总长度:', fullContent.length)
+                      }
+                      
+                      if (onChunk) onChunk(fullContent)
+                    }
+                  } catch (parseError) {
+                    console.log('JSON解析失败，当作文本处理:', line)
+                    fullContent += line + '\n'
+                    if (onChunk) onChunk(fullContent)
+                  }
+                }
+              }
+            } else if (contentType?.includes('text/event-stream')) {
+              // SSE格式
+              const lines = buffer.split('\n')
+              buffer = lines.pop() || ''
+
+              for (const line of lines) {
+                console.log('处理SSE行:', line)
+                
+                if (line.startsWith('data: ')) {
+                  try {
+                    const jsonStr = line.slice(6)
+                    if (jsonStr === '[DONE]') break
+                    
+                    const data = JSON.parse(jsonStr)
+                    if (data.content || data.response) {
+                      const newContent = data.content || data.response
+                      
+                      // 检查是否是增量内容还是完整内容
+                      if (newContent.length > fullContent.length && newContent.startsWith(fullContent)) {
+                        // 这是增量更新（新内容包含旧内容）
+                        fullContent = newContent
+                        console.log('SSE更新完整内容，总长度:', fullContent.length)
+                      } else {
+                        // 这是新的增量块，需要累加
+                        fullContent += newContent
+                        console.log('SSE累加新内容，总长度:', fullContent.length)
+                      }
+                      
+                      if (onChunk) onChunk(fullContent)
+                    }
+                  } catch (e) {
+                    // 纯文本数据
+                    const textContent = line.slice(6)
+                    fullContent += textContent
+                    if (onChunk) onChunk(fullContent)
+                  }
+                }
+              }
+            } else {
+              // 纯文本或其他格式，直接累加
+              fullContent += chunk
+              console.log('累加文本内容，当前长度:', fullContent.length)
+              if (onChunk) onChunk(fullContent)
+            }
+          }
+        } catch (readerError) {
+          console.error('流式读取错误:', readerError)
+          throw readerError
+        }
+
+        // 如果没有通过流式获取到内容，尝试解析完整响应
+        if (!fullContent && buffer) {
+          try {
+            const finalData = JSON.parse(buffer)
+            fullContent = finalData.content || finalData.response || finalData.message || buffer
+          } catch (e) {
+            fullContent = buffer
+          }
+          
+          if (fullContent && onChunk) {
+            console.log('使用缓冲区内容:', fullContent)
+            onChunk(fullContent)
+          }
+        }
+
         return {
           success: true,
           data: {
-            content: '抱歉，AI服务暂时不可用。请确保您已配置n8n工作流，或联系管理员获取帮助。',
-            tokens_used: 0,
-            provider: 'fallback',
-            metadata: {
-              fallback: true,
-              error: error.message,
-              timestamp: new Date().toISOString()
-            }
+            content: fullContent || '响应完成',
+            provider: 'n8n',
+            response_time: Date.now(),
+            metadata: { stream: true }
+          }
+        }
+      } else {
+        // 没有响应体，尝试解析JSON
+        const result = await response.json()
+        console.log('JSON响应结果:', result)
+        
+        const content = result.response || result.content || result.message || '无响应内容'
+        
+        // 模拟流式输出
+        if (onChunk) {
+          console.log('模拟流式输出内容:', content)
+          const chars = content.split('')
+          let displayContent = ''
+          
+          for (let i = 0; i < chars.length; i++) {
+            displayContent += chars[i]
+            onChunk(displayContent)
+            await new Promise(resolve => setTimeout(resolve, 30))
+          }
+        }
+
+        return {
+          success: true,
+          data: {
+            content: content,
+            provider: 'n8n',
+            response_time: Date.now(),
+            metadata: result.metadata || {}
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('AI流式生成失败:', error)
+      
+      // 如果是CORS错误，提供提示
+      if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+        return {
+          success: true,
+          data: {
+            content: `⚠️ 检测到网络请求被阻止（CORS限制）。
+
+解决方案：
+1. 在n8n工作流中添加CORS头设置
+2. 或者使用代理服务器转发请求
+3. 或者在浏览器中禁用CORS检查（开发环境）
+
+原始错误: ${error.message}`,
+            provider: 'error',
+            response_time: Date.now(),
+            metadata: { error: true, cors: true }
           }
         }
       }
       
       return {
         success: false,
-        error: error.message || '生成回复时发生错误'
+        error: error.message
       }
-    }
-  }
-
-  /**
-   * 流式生成回复
-   * @param {string} prompt - 用户输入
-   * @param {Object} config - AI配置
-   * @param {Object} context - 上下文信息
-   * @param {Function} onChunk - 数据块回调
-   * @returns {Promise<Object>} 最终结果
-   */
-  async generateStreamResponse(prompt, config = {}, context = {}, onChunk) {
-    try {
-      const user = await getCurrentUser()
-      if (!user) {
-        throw new Error('用户未登录')
-      }
-
-      const startTime = Date.now()
-      
-      // 构建请求URL
-      const functionUrl = `${this.baseUrl}/functions/v1/chat-stream-handler`
-      
-      const requestBody = {
-        sessionId: config.session_id,
-        message: prompt,
-        userId: config.user_id || user.id,
-        context,
-        aiConfig: {
-          model_provider: config.provider || this.defaultProvider,
-          model_name: config.model_name || 'gpt-3.5-turbo',
-          temperature: config.temperature || 0.7,
-          max_tokens: config.max_tokens || 1000,
-          stream: true,
-          ...config
-        }
-      }
-
-      // 获取auth token
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('认证失败')
-      }
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify(requestBody)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}`)
-      }
-
-      // 处理流式响应
-      if (response.body) {
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let finalResult = null
-
-        try {
-          while (true) {
-            const { value, done } = await reader.read()
-            if (done) break
-
-            const chunk = decoder.decode(value, { stream: true })
-            const lines = chunk.split('\n')
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6))
-                  
-                  if (data.type === 'content' && onChunk) {
-                    onChunk(data.data)
-                  } else if (data.type === 'done' || data.done) {
-                    finalResult = data.data
-                    break
-                  } else if (data.type === 'error') {
-                    throw new Error(data.error)
-                  }
-                } catch (parseError) {
-                  console.error('Error parsing streaming data:', parseError)
-                }
-              }
-            }
-
-            if (finalResult) break
-          }
-        } catch (readerError) {
-          console.error('Streaming read error:', readerError)
-          throw readerError
-        }
-
-        const responseTime = Date.now() - startTime
-
-        return {
-          success: true,
-          data: {
-            ...(finalResult || { content: '流式响应完成但未获取到最终结果' }),
-            response_time: responseTime,
-            provider: config.provider || this.defaultProvider
-          }
-        }
-      } else {
-        throw new Error('No response body for streaming')
-      }
-
-    } catch (error) {
-      console.error('AI流式生成失败:', error)
-      
-      // 如果流式失败，回退到普通模式
-      console.log('流式响应失败，回退到普通模式...')
-      const result = await this.generateResponse(prompt, config, context)
-      
-      if (result.success && onChunk) {
-        // 模拟流式输出
-        const content = result.data.content
-        const words = content.split('')
-        
-        for (let i = 0; i < words.length; i++) {
-          await new Promise(resolve => setTimeout(resolve, 20))
-          onChunk(words.slice(0, i + 1).join(''))
-        }
-      }
-      
-      return result
     }
   }
 
