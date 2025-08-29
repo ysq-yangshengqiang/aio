@@ -8,6 +8,8 @@ export { aiService } from './ai.service.js'
 export { aiConfigService } from './ai-config.service.js'
 export { notificationService } from './notification.service.js'
 export { analyticsService } from './analytics.service.js'
+export { recommendationService } from './recommendation.service.js'
+export { deepSeekService } from './deepseek.service.js'
 
 // 默认导出所有服务
 export default {
@@ -19,5 +21,7 @@ export default {
   aiService,
   aiConfigService,
   notificationService,
-  analyticsService
+  analyticsService,
+  recommendationService,
+  deepSeekService
 }
