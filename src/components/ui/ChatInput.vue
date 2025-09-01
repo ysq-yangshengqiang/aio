@@ -1,6 +1,6 @@
 <template>
-  <div class="bg-white border-t border-gray-200">
-    <div class="p-4">
+  <div class="bg-white border-t border-gray-200 shadow-lg sticky bottom-0 z-10">
+    <div class="px-6 py-4">
       <!-- 智能建议 -->
       <div v-if="suggestions.length > 0 && !inputValue.trim()" class="mb-4">
         <p class="text-xs text-gray-500 mb-2">💡 您可以试试：</p>
@@ -50,9 +50,9 @@
               @blur="handleBlur"
               placeholder="输入您的问题... (Shift+Enter 换行，Enter 发送)"
               rows="1"
-              class="block w-full resize-none border-2 border-gray-200 rounded-xl px-4 py-3 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-gray-50 focus:bg-white"
+              class="block w-full resize-none border-2 border-gray-200 rounded-xl px-4 py-4 pr-12 focus:ring-0 focus:border-blue-400 focus:outline-none transition-all duration-200 bg-gray-50 focus:bg-white chat-input-enhanced"
               :disabled="isLoading"
-              :style="{ minHeight: '48px', maxHeight: '120px', height: textareaHeight }"
+              :style="{ minHeight: '60px', maxHeight: '160px', height: textareaHeight }"
             ></textarea>
             
             <!-- 输入框内的操作按钮 -->
@@ -241,7 +241,7 @@ const adjustHeight = () => {
   const textarea = textareaRef.value
   if (textarea) {
     textarea.style.height = 'auto'
-    const newHeight = Math.min(Math.max(textarea.scrollHeight, 48), 120)
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 160)
     textareaHeight.value = `${newHeight}px`
     textarea.style.height = `${newHeight}px`
   }
@@ -277,7 +277,7 @@ const sendMessage = () => {
 
 const clearInput = () => {
   inputValue.value = ''
-  textareaHeight.value = '48px'
+  textareaHeight.value = '60px'
   if (textareaRef.value) {
     textareaRef.value.focus()
   }
@@ -322,6 +322,32 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 聊天输入框容器美化 */
+.sticky {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* 增强的聊天输入框样式 */
+.chat-input-enhanced {
+  font-size: 16px;
+  line-height: 1.5;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-input-enhanced:focus {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 0 transparent, 0 4px 16px rgba(96, 165, 250, 0.15) !important;
+  transform: translateY(-1px);
+}
+
+.chat-input-enhanced:hover:not(:focus) {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 /* 自定义滚动条 */
 textarea::-webkit-scrollbar {
   width: 6px;
@@ -342,11 +368,41 @@ textarea::-webkit-scrollbar-thumb:hover {
 
 /* 输入框动画 */
 textarea {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-textarea:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+/* 发送按钮增强 */
+.p-3.rounded-xl {
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.p-3.rounded-xl:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+}
+
+/* 建议按钮美化 */
+.px-3.py-1\.5.text-sm.bg-blue-50 {
+  border-radius: 20px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.px-3.py-1\.5.text-sm.bg-blue-50:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* 附件按钮美化 */
+.p-2.text-gray-400 {
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.p-2.text-gray-400:hover {
+  transform: scale(1.1);
+  background-color: rgba(59, 130, 246, 0.1) !important;
 }
 
 /* 键盘快捷键样式 */
@@ -358,7 +414,79 @@ kbd {
   color: #374151;
   background-color: #f3f4f6;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+}
+
+/* 附件菜单美化 */
+.mt-3.p-3.bg-gray-50 {
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  background: rgba(249, 250, 251, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 附件菜单按钮 */
+.flex.flex-col.items-center.p-3.rounded-lg {
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.flex.flex-col.items-center.p-3.rounded-lg:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .chat-input-enhanced {
+    font-size: 16px; /* 防止iOS缩放 */
+  }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .sticky {
+    background: rgba(17, 24, 39, 0.95);
+    border-color: #374151;
+  }
+  
+  .chat-input-enhanced {
+    background-color: #1f2937;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+  
+  .chat-input-enhanced:focus {
+    background-color: #111827;
+    border-color: #60a5fa;
+  }
+  
+  kbd {
+    background-color: #374151;
+    color: #d1d5db;
+    border-color: #4b5563;
+  }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+  .chat-input-enhanced {
+    border-width: 3px;
+  }
+  
+  .chat-input-enhanced:focus {
+    border-width: 3px;
+    border-color: #1d4ed8;
+  }
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 </style>

@@ -335,18 +335,21 @@
         </div>
 
         <!-- 输入区域 -->
-        <ChatInput
-          v-model="newMessage"
-          :is-loading="chatStore.isTyping"
-          :suggestions="inputSuggestions"
-          @send="sendMessage"
-          @suggestion="handleSuggestion"
-        />
+        <div class="relative">
+          <ChatInput
+            v-model="newMessage"
+            :is-loading="chatStore.isTyping"
+            :suggestions="inputSuggestions"
+            @send="sendMessage"
+            @suggestion="handleSuggestion"
+          />
+        </div>
       </div>
     </div>
     
     <!-- 调试组件 -->
     <StreamDebugger v-if="isDev" />
+    
   </div>
 </template>
 
